@@ -1,0 +1,22 @@
+export const defaultCategories = [
+  { name: "全部", color: "#3b82f6", icon: "sparkles", sortOrder: 0 },
+  { name: "社交媒体", color: "#ec4899", icon: "heart", sortOrder: 1 },
+  { name: "工作", color: "#8b5cf6", icon: "briefcase", sortOrder: 2 },
+  { name: "AI中转站", color: "#38bdf8", icon: "bot", sortOrder: 3 },
+  { name: "金融理财", color: "#22c55e", icon: "wallet", sortOrder: 4 },
+  { name: "购物", color: "#f59e0b", icon: "shopping", sortOrder: 5 },
+  { name: "娱乐", color: "#ef4444", icon: "play", sortOrder: 6 },
+  { name: "工具", color: "#06b6d4", icon: "tool", sortOrder: 7 },
+  { name: "教育", color: "#10b981", icon: "book", sortOrder: 8 },
+  { name: "生活", color: "#a855f7", icon: "home", sortOrder: 9 }
+] as const;
+
+export type DefaultCategory = (typeof defaultCategories)[number];
+
+export async function ensureDefaultCategories(
+  upsert: (category: DefaultCategory) => Promise<unknown>
+) {
+  await Promise.all(
+    defaultCategories.map((category) => upsert(category))
+  );
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.docker
+.env.local
+docker-data/
+*.db
+*.db-journal
+*.sqlite
+coverage/
+playwright-report/
+ui-check*.png
+.chrome-cdp/
+.chrome-vault/
+*.log

@@ -1,0 +1,60 @@
+{
+  "name": "password-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"tsx watch src/server/index.ts\" \"vite --host 0.0.0.0 --port 5173\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:client": "vite --host 0.0.0.0 --port 5173",
+    "build": "vue-tsc -p tsconfig.app.json --noEmit && vite build && tsc -p tsconfig.server.json",
+    "build:client": "vue-tsc -p tsconfig.app.json --noEmit && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node dist/server/index.js",
+    "db:generate": "prisma generate",
+    "db:push": "node scripts/init-db.mjs",
+    "db:push:prisma": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "node scripts/init-db.mjs --reset && tsx prisma/seed.ts",
+    "test": "cross-env NODE_ENV=test DATABASE_URL=file:./test.db JWT_SECRET=test-jwt-secret SERVER_CRYPTO_SECRET=test-crypto-secret node scripts/init-db.mjs --reset && cross-env NODE_ENV=test DATABASE_URL=file:./test.db JWT_SECRET=test-jwt-secret SERVER_CRYPTO_SECRET=test-crypto-secret vitest run",
+    "visual:check": "node scripts/visual-check.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-vue-next": "^0.468.0",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.2",
+    "@types/supertest": "^6.0.2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "jsdom": "^25.0.1",
+    "prisma": "^5.22.0",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8",
+    "vue-tsc": "^2.1.10"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

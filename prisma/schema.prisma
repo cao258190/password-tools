@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String
+  cryptoSalt   String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  sites        Site[]
+  accounts     Account[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String
+  icon      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sites     Site[]
+}
+
+model Site {
+  id          String    @id @default(cuid())
+  userId      String
+  categoryId  String?
+  name        String
+  primaryUrl  String
+  backupUrls  String    @default("[]")
+  iconType    String    @default("letter")
+  iconValue   String    @default("S")
+  iconBg      String    @default("#2563eb")
+  favorite    Boolean   @default(false)
+  tags        String    @default("[]")
+  note        String?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  accounts    Account[]
+
+  @@index([userId])
+  @@index([categoryId])
+}
+
+model Account {
+  id             String    @id @default(cuid())
+  userId         String
+  siteId         String
+  label          String
+  username       String
+  passwordSecret String
+  strength       String    @default("weak")
+  favorite       Boolean   @default(false)
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site           Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([siteId])
+}
