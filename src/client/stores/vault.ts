@@ -30,9 +30,7 @@ const emptyStats: Stats = {
   favorites: 0,
   weakAccounts: 0,
   mediumAccounts: 0,
-  strongAccounts: 0,
-  storageUsedMb: 0,
-  storageLimitMb: 5000
+  strongAccounts: 0
 };
 
 async function writeClipboard(text: string) {

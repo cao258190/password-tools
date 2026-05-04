@@ -1,19 +1,9 @@
 import { prisma } from "./db.js";
 import { env } from "./env.js";
 import { createApp } from "./app.js";
-import { ensureDefaultCategories } from "./services/defaults.js";
+import { bootstrapSystem } from "./services/bootstrap.js";
 
-await ensureDefaultCategories((category) =>
-  prisma.category.upsert({
-    where: { name: category.name },
-    update: {
-      color: category.color,
-      icon: category.icon,
-      sortOrder: category.sortOrder
-    },
-    create: { ...category }
-  })
-);
+await bootstrapSystem();
 
 const app = createApp();
 const server = app.listen(env.port, () => {

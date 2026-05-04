@@ -1,7 +1,9 @@
 import type {
   Account,
   AccountInput,
+  AdminSettings,
   Category,
+  PublicSettings,
   SiteDetail,
   SiteInput,
   SiteSummary,
@@ -52,6 +54,9 @@ export const api = {
   register(input: { email: string; password: string; name?: string }) {
     return request<{ user: User }>("/api/auth/register", withBody("POST", input));
   },
+  publicSettings() {
+    return request<{ settings: PublicSettings }>("/api/public/settings");
+  },
   login(input: { email: string; password: string }) {
     return request<{ user: User }>("/api/auth/login", withBody("POST", input));
   },
@@ -66,6 +71,12 @@ export const api = {
   },
   changePassword(input: { currentPassword: string; newPassword: string }) {
     return request<void>("/api/auth/password", withBody("PATCH", input));
+  },
+  adminSettings() {
+    return request<{ settings: AdminSettings }>("/api/admin/settings");
+  },
+  updateAdminSettings(input: AdminSettings) {
+    return request<{ settings: AdminSettings }>("/api/admin/settings", withBody("PATCH", input));
   },
   categories() {
     return request<{ categories: Category[] }>("/api/categories");

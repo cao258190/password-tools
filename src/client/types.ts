@@ -4,7 +4,14 @@ export type User = {
   id: string;
   email: string;
   name: string | null;
+  isAdmin: boolean;
 };
+
+export type PublicSettings = {
+  registrationEnabled: boolean;
+};
+
+export type AdminSettings = PublicSettings;
 
 export type Category = {
   id: string;
@@ -43,6 +50,7 @@ export type SiteSummary = {
   iconType: string;
   iconValue: string;
   iconBg: string;
+  iconColor: string;
   favorite: boolean;
   tags: string[];
   note: string;
@@ -63,8 +71,6 @@ export type Stats = {
   weakAccounts: number;
   mediumAccounts: number;
   strongAccounts: number;
-  storageUsedMb: number;
-  storageLimitMb: number;
 };
 
 export type SiteInput = {
@@ -75,6 +81,7 @@ export type SiteInput = {
   iconType: string;
   iconValue: string;
   iconBg: string;
+  iconColor: string;
   favorite: boolean;
   tags: string[];
   note?: string;

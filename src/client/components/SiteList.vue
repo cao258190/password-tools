@@ -112,7 +112,7 @@ function chooseCategory(id: string, name: string) {
         type="button"
         @click="void vault.selectSite(site.id)"
       >
-        <BrandMark :icon-type="site.iconType" :icon-value="site.iconValue" :icon-bg="site.iconBg" :size="34" />
+        <BrandMark :icon-type="site.iconType" :icon-value="site.iconValue" :icon-bg="site.iconBg" :icon-color="site.iconColor" :size="34" />
         <span class="site-row-main">
           <strong>{{ site.name }}</strong>
           <small>{{ site.accountCount }} 个账号</small>

@@ -2,7 +2,8 @@ import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { prisma } from "../../src/server/db";
-import { defaultCategories, ensureDefaultCategories } from "../../src/server/services/defaults";
+import { bootstrapSystem, setRegistrationEnabled } from "../../src/server/services/bootstrap";
+import { defaultCategories } from "../../src/server/services/defaults";
 
 const app = createApp();
 
@@ -10,21 +11,8 @@ async function clearDatabase() {
   await prisma.account.deleteMany();
   await prisma.site.deleteMany();
   await prisma.category.deleteMany();
+  await prisma.appSetting.deleteMany();
   await prisma.user.deleteMany();
-}
-
-async function seedGlobalCategories() {
-  await ensureDefaultCategories((category) =>
-    prisma.category.upsert({
-      where: { name: category.name },
-      update: {
-        color: category.color,
-        icon: category.icon,
-        sortOrder: category.sortOrder
-      },
-      create: { ...category }
-    })
-  );
 }
 
 async function registerAgent(email: string) {
@@ -39,7 +27,8 @@ async function registerAgent(email: string) {
 describe("password vault API", () => {
   beforeEach(async () => {
     await clearDatabase();
-    await seedGlobalCategories();
+    await bootstrapSystem();
+    await setRegistrationEnabled(true);
   });
 
   afterAll(async () => {
@@ -51,6 +40,36 @@ describe("password vault API", () => {
 
     const response = await agent.get("/api/auth/me").expect(200);
     expect(response.body.user.email).toBe("user@example.com");
+    expect(response.body.user.isAdmin).toBe(false);
+  });
+
+  it("creates a default admin and lets only admins control registration", async () => {
+    await setRegistrationEnabled(false);
+
+    await request(app)
+      .post("/api/auth/register")
+      .send({ email: "blocked@example.com", password: "testpass123", name: "B" })
+      .expect(403);
+
+    const admin = request.agent(app);
+    const loggedIn = await admin
+      .post("/api/auth/login")
+      .send({ email: "admin@example.com", password: "admin123456" })
+      .expect(200);
+    expect(loggedIn.body.user.isAdmin).toBe(true);
+
+    const disabled = await admin.get("/api/admin/settings").expect(200);
+    expect(disabled.body.settings.registrationEnabled).toBe(false);
+
+    await admin.patch("/api/admin/settings").send({ registrationEnabled: true }).expect(200);
+
+    await request(app)
+      .post("/api/auth/register")
+      .send({ email: "opened@example.com", password: "testpass123", name: "O" })
+      .expect(201);
+
+    const normalUser = await registerAgent("normal@example.com");
+    await normalUser.patch("/api/admin/settings").send({ registrationEnabled: false }).expect(403);
   });
 
   it("uses one shared fixed category set for every user", async () => {
@@ -116,6 +135,8 @@ describe("password vault API", () => {
         backupUrls: ["https://login.example.com"],
         categoryId: work.id,
         iconValue: "E",
+        iconBg: "#ffffff",
+        iconColor: "#111827",
         tags: ["测试", "重要"],
         note: "A test vault item",
         accounts: [
@@ -136,6 +157,7 @@ describe("password vault API", () => {
 
     const detail = await agent.get(`/api/sites/${siteId}`).expect(200);
     expect(detail.body.site.accounts[0].password).toBe("PlainPass#2026");
+    expect(detail.body.site.iconColor).toBe("#111827");
     expect(detail.body.site.accountCount).toBe(1);
   });
 

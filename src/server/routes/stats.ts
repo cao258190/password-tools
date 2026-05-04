@@ -26,9 +26,7 @@ statsRouter.get(
         favorites,
         weakAccounts,
         mediumAccounts,
-        strongAccounts,
-        storageUsedMb: 2340,
-        storageLimitMb: 5000
+        strongAccounts
       }
     });
   })

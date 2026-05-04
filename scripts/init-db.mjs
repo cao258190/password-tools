@@ -1,6 +1,8 @@
 import { mkdirSync, rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import bcrypt from "bcryptjs";
 
 const defaultCategories = [
   { name: "全部", color: "#3b82f6", icon: "sparkles", sortOrder: 0 },
@@ -17,6 +19,9 @@ const defaultCategories = [
 
 const reset = process.argv.includes("--reset");
 const databaseUrl = process.env.DATABASE_URL ?? "file:./dev.db";
+const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
+const adminPassword = process.env.ADMIN_PASSWORD ?? "admin123456";
+const registrationEnabledByDefault = process.env.REGISTRATION_ENABLED === "true";
 
 if (!databaseUrl.startsWith("file:")) {
   throw new Error("scripts/init-db.mjs only supports SQLite file: DATABASE_URL values.");
@@ -41,6 +46,14 @@ CREATE TABLE IF NOT EXISTS "User" (
   "name" TEXT,
   "passwordHash" TEXT NOT NULL,
   "cryptoSalt" TEXT NOT NULL,
+  "isAdmin" BOOLEAN NOT NULL DEFAULT false,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "AppSetting" (
+  "key" TEXT NOT NULL PRIMARY KEY,
+  "value" TEXT NOT NULL,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL
 );
@@ -65,6 +78,7 @@ CREATE TABLE IF NOT EXISTS "Site" (
   "iconType" TEXT NOT NULL DEFAULT 'letter',
   "iconValue" TEXT NOT NULL DEFAULT 'S',
   "iconBg" TEXT NOT NULL DEFAULT '#2563eb',
+  "iconColor" TEXT NOT NULL DEFAULT '#ffffff',
   "favorite" BOOLEAN NOT NULL DEFAULT false,
   "tags" TEXT NOT NULL DEFAULT '[]',
   "note" TEXT,
@@ -97,6 +111,29 @@ CREATE INDEX IF NOT EXISTS "Site_categoryId_idx" ON "Site"("categoryId");
 CREATE INDEX IF NOT EXISTS "Account_userId_idx" ON "Account"("userId");
 CREATE INDEX IF NOT EXISTS "Account_siteId_idx" ON "Account"("siteId");
 `);
+
+const userColumns = db
+  .prepare(`PRAGMA table_info("User")`)
+  .all()
+  .map((column) => column.name);
+if (!userColumns.includes("isAdmin")) {
+  db.exec(`ALTER TABLE "User" ADD COLUMN "isAdmin" BOOLEAN NOT NULL DEFAULT false;`);
+}
+
+const siteColumns = db
+  .prepare(`PRAGMA table_info("Site")`)
+  .all()
+  .map((column) => column.name);
+if (!siteColumns.includes("iconColor")) {
+  db.exec(`ALTER TABLE "Site" ADD COLUMN "iconColor" TEXT NOT NULL DEFAULT '#ffffff';`);
+  db.exec(`
+UPDATE "Site"
+SET "iconColor" = CASE
+  WHEN lower("iconBg") IN ('#ffffff', '#fff', 'white') THEN '#111827'
+  ELSE '#ffffff'
+END
+`);
+}
 
 const categoryColumns = db
   .prepare(`PRAGMA table_info("Category")`)
@@ -197,6 +234,41 @@ for (const category of defaultCategories) {
     category.sortOrder,
     now,
     now
+  );
+}
+
+const insertSetting = db.prepare(`
+INSERT INTO "AppSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES (?, ?, ?, ?)
+ON CONFLICT("key") DO NOTHING
+`);
+insertSetting.run(
+  "registrationEnabled",
+  String(registrationEnabledByDefault),
+  now,
+  now
+);
+
+const existingAdmin = db
+  .prepare(`SELECT "id", "isAdmin" FROM "User" WHERE "email" = ?`)
+  .get(adminEmail);
+if (!existingAdmin) {
+  db.prepare(`
+INSERT INTO "User" ("id", "email", "name", "passwordHash", "cryptoSalt", "isAdmin", "createdAt", "updatedAt")
+VALUES (?, ?, ?, ?, ?, true, ?, ?)
+`).run(
+    `admin-${randomBytes(8).toString("hex")}`,
+    adminEmail,
+    "Admin",
+    await bcrypt.hash(adminPassword, 12),
+    randomBytes(16).toString("hex"),
+    now,
+    now
+  );
+} else if (!existingAdmin.isAdmin) {
+  db.prepare(`UPDATE "User" SET "isAdmin" = true, "updatedAt" = ? WHERE "id" = ?`).run(
+    now,
+    existingAdmin.id
   );
 }
 

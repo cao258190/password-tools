@@ -1,10 +1,10 @@
-import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { HttpError, asyncHandler } from "../http.js";
 import { clearAuthCookie, publicUser, requireAuth, setAuthCookie } from "../middleware/auth.js";
+import { getRegistrationEnabled } from "../services/bootstrap.js";
 import { createUserSalt } from "../utils/crypto.js";
 
 export const authRouter = Router();
@@ -29,6 +29,11 @@ authRouter.post(
   "/register",
   asyncHandler(async (req, res) => {
     const input = authSchema.parse(req.body);
+    const registrationEnabled = await getRegistrationEnabled();
+    if (!registrationEnabled) {
+      throw new HttpError(403, "管理员已关闭新用户注册");
+    }
+
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
     if (existing) {
       throw new HttpError(409, "该邮箱已注册");
@@ -39,9 +44,9 @@ authRouter.post(
         email: input.email,
         name: input.name || input.email.slice(0, 1).toUpperCase(),
         passwordHash: await bcrypt.hash(input.password, 12),
-        cryptoSalt: createUserSalt() || randomBytes(16).toString("hex")
+        cryptoSalt: createUserSalt()
       },
-      select: { id: true, email: true, name: true, cryptoSalt: true }
+      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true }
     });
 
     setAuthCookie(res, user.id);
@@ -64,7 +69,8 @@ authRouter.post(
         id: user.id,
         email: user.email,
         name: user.name,
-        cryptoSalt: user.cryptoSalt
+        cryptoSalt: user.cryptoSalt,
+        isAdmin: user.isAdmin
       })
     });
   })
@@ -104,7 +110,7 @@ authRouter.patch(
         email: input.email,
         name: input.name || null
       },
-      select: { id: true, email: true, name: true, cryptoSalt: true }
+      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true }
     });
 
     res.json({ user: publicUser(user) });

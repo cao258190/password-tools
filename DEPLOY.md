@@ -16,11 +16,11 @@ chmod +x deploy.sh
 
 前端 Nginx 会把 `/api/*` 代理到后端容器，所以浏览器只访问 `3910` 也能完整使用系统。
 
-首次部署会自动初始化 SQLite 表结构和固定分类字典，网站与账号数据为空。请在页面里注册新账号开始使用，数据会持久化到 Docker volume。
+首次部署会自动初始化 SQLite 表结构、固定分类字典和默认管理员账号，网站与账号数据为空。请使用管理员账号登录，再按需开启新用户注册。数据会持久化到 Docker volume。
 
 ## 环境变量
 
-首次执行 `deploy.sh` 会自动生成 `.env.docker`，包含随机 `JWT_SECRET` 与 `SERVER_CRYPTO_SECRET`。
+首次执行 `deploy.sh` 会自动生成 `.env.docker`，包含随机 `JWT_SECRET`、`SERVER_CRYPTO_SECRET` 与 `ADMIN_PASSWORD`。脚本会在终端输出默认管理员邮箱和密码，请妥善保存。
 
 如果部署在域名或 HTTPS 后面，请修改 `.env.docker`：
 
@@ -34,6 +34,16 @@ COOKIE_SECURE=true
 ```env
 COOKIE_SECURE=false
 ```
+
+默认管理员配置：
+
+```env
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=change-me-before-deploy
+REGISTRATION_ENABLED=false
+```
+
+`REGISTRATION_ENABLED=false` 表示首次部署后关闭普通注册入口，管理员可在应用设置中重新开启。
 
 ## 常用命令
 

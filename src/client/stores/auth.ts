@@ -1,12 +1,13 @@
 import { defineStore } from "pinia";
 import { api, ApiError } from "../api";
-import type { User } from "../types";
+import type { PublicSettings, User } from "../types";
 
 type AuthState = {
   user: User | null;
   loading: boolean;
   bootstrapped: boolean;
   error: string;
+  publicSettings: PublicSettings;
 };
 
 export const useAuthStore = defineStore("auth", {
@@ -14,19 +15,31 @@ export const useAuthStore = defineStore("auth", {
     user: null,
     loading: false,
     bootstrapped: false,
-    error: ""
+    error: "",
+    publicSettings: { registrationEnabled: false }
   }),
   actions: {
+    async loadPublicSettings() {
+      const { settings } = await api.publicSettings();
+      this.publicSettings = settings;
+      return settings;
+    },
     async bootstrap() {
       if (this.bootstrapped) return;
       this.loading = true;
       try {
-        const { user } = await api.me();
+        const [{ settings }, me] = await Promise.all([
+          api.publicSettings(),
+          api.me().catch((error) => {
+            if (error instanceof ApiError && error.status === 401) return null;
+            throw error;
+          })
+        ]);
+        this.publicSettings = settings;
+        const user = me?.user ?? null;
         this.user = user;
       } catch (error) {
-        if (!(error instanceof ApiError && error.status === 401)) {
-          this.error = error instanceof Error ? error.message : "加载登录状态失败";
-        }
+        this.error = error instanceof Error ? error.message : "加载登录状态失败";
         this.user = null;
       } finally {
         this.loading = false;

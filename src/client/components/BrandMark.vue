@@ -6,9 +6,10 @@ const props = withDefaults(
     iconType: string;
     iconValue: string;
     iconBg: string;
+    iconColor?: string;
     size?: number;
   }>(),
-  { size: 36 }
+  { iconColor: "#ffffff", size: 36 }
 );
 
 const textSize = computed(() => {
@@ -22,7 +23,7 @@ const textSize = computed(() => {
   <span
     class="brand-mark"
     :class="[`brand-${props.iconType}`]"
-    :style="{ width: `${props.size}px`, height: `${props.size}px`, background: props.iconBg }"
+    :style="{ width: `${props.size}px`, height: `${props.size}px`, background: props.iconBg, color: props.iconColor }"
   >
     <span v-if="props.iconType === 'microsoft'" class="microsoft-grid">
       <i />

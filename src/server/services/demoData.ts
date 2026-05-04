@@ -1,4 +1,4 @@
-export const demoUser = {
+﻿export const demoUser = {
   email: "demo@example.com",
   name: "U",
   password: "demo123456"
@@ -13,6 +13,7 @@ export const demoSites = [
     iconType: "google",
     iconValue: "G",
     iconBg: "#ffffff",
+    iconColor: "#111827",
     favorite: false,
     tags: ["搜索引擎", "重要", "工作"],
     note: "Google 账户用于登录 Google 各项服务（Gmail、Drive、YouTube 等）。\n建议开启两步验证以增强账户安全。",
@@ -48,6 +49,7 @@ export const demoSites = [
     iconType: "microsoft",
     iconValue: "M",
     iconBg: "#ffffff",
+    iconColor: "#111827",
     favorite: false,
     tags: ["办公", "工作"],
     note: "用于 Office、Azure 和 Windows 设备同步。",
@@ -76,6 +78,7 @@ export const demoSites = [
     iconType: "github",
     iconValue: "GH",
     iconBg: "#111827",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["代码", "工作"],
     note: "仓库、CI 和访问令牌统一记录在这里。",
@@ -104,6 +107,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "支",
     iconBg: "#1677ff",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["支付", "重要"],
     note: "支付账户，保留手机验证和风控提醒。",
@@ -132,6 +136,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "微",
     iconBg: "#22c55e",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["社交"],
     note: "常用社交账号。",
@@ -153,6 +158,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "淘",
     iconBg: "#ff6a00",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["购物"],
     note: "购物与收货地址管理。",
@@ -174,6 +180,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "▶",
     iconBg: "#ff0000",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["视频", "娱乐"],
     note: "订阅与频道管理。",
@@ -202,6 +209,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "X",
     iconBg: "#1d9bf0",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["社交", "资讯"],
     note: "公共账号与私信提醒。",
@@ -223,6 +231,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "N",
     iconBg: "#111827",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["视频", "家庭"],
     note: "家庭共享订阅。",
@@ -244,6 +253,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "N",
     iconBg: "#ffffff",
+    iconColor: "#111827",
     favorite: false,
     tags: ["笔记", "工具"],
     note: "知识库和项目文档。",
@@ -265,6 +275,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "哔",
     iconBg: "#fb7299",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["视频"],
     note: "视频与直播账号。",
@@ -286,6 +297,7 @@ export const demoSites = [
     iconType: "letter",
     iconValue: "京",
     iconBg: "#e1251b",
+    iconColor: "#ffffff",
     favorite: false,
     tags: ["购物"],
     note: "购物和发票信息。",
@@ -300,3 +312,5 @@ export const demoSites = [
     ]
   }
 ] as const;
+
+

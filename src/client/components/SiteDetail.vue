@@ -42,7 +42,7 @@ async function copyValue(value: string, id: string) {
 
     <template v-else>
       <header class="detail-title">
-        <BrandMark :icon-type="props.site.iconType" :icon-value="props.site.iconValue" :icon-bg="props.site.iconBg" :size="44" />
+        <BrandMark :icon-type="props.site.iconType" :icon-value="props.site.iconValue" :icon-bg="props.site.iconBg" :icon-color="props.site.iconColor" :size="44" />
         <div>
           <h1>{{ props.site.name }}</h1>
           <span>最近修改：{{ relativeTime(props.site.updatedAt) }}</span>

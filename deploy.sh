@@ -17,8 +17,13 @@ CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3910}
 COOKIE_SECURE=${COOKIE_SECURE:-false}
 JWT_SECRET=$(random_secret)
 SERVER_CRYPTO_SECRET=$(random_secret)
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-$(random_secret)}
+REGISTRATION_ENABLED=${REGISTRATION_ENABLED:-false}
 EOF
   echo "Created $env_file with generated secrets."
+  echo "Default admin email: $(grep '^ADMIN_EMAIL=' "$env_file" | cut -d= -f2-)"
+  echo "Default admin password: $(grep '^ADMIN_PASSWORD=' "$env_file" | cut -d= -f2-)"
 fi
 
 docker compose --env-file "$env_file" up -d --build

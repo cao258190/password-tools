@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 import { Save } from "lucide-vue-next";
+import BrandMark from "./BrandMark.vue";
 import ModalFrame from "./ModalFrame.vue";
 import type { Category, SiteDetail, SiteInput } from "../types";
 
@@ -15,7 +16,8 @@ const emit = defineEmits<{
   submit: [payload: SiteInput];
 }>();
 
-const colors = ["#4285f4", "#22c55e", "#f97316", "#ef4444", "#8b5cf6", "#06b6d4"];
+const backgroundColors = ["#4285f4", "#2563eb", "#22c55e", "#f97316", "#ef4444", "#8b5cf6", "#06b6d4", "#111827", "#ffffff"];
+const textColors = ["#ffffff", "#111827", "#2563eb", "#22c55e", "#f97316", "#ef4444", "#8b5cf6", "#06b6d4"];
 const title = computed(() => (props.site ? "编辑网站" : "添加网站"));
 
 const form = reactive({
@@ -25,7 +27,8 @@ const form = reactive({
   categoryId: "",
   iconType: "letter",
   iconValue: "S",
-  iconBg: colors[0],
+  iconBg: backgroundColors[0],
+  iconColor: "#ffffff",
   favorite: false,
   tags: "",
   note: ""
@@ -41,7 +44,8 @@ watch(
     form.categoryId = props.site?.categoryId ?? fallbackCategory;
     form.iconType = props.site?.iconType ?? "letter";
     form.iconValue = props.site?.iconValue ?? "S";
-    form.iconBg = props.site?.iconBg ?? colors[0];
+    form.iconBg = props.site?.iconBg ?? backgroundColors[0];
+    form.iconColor = props.site?.iconColor ?? (form.iconBg.toLowerCase() === "#ffffff" ? "#111827" : "#ffffff");
     form.favorite = props.site?.favorite ?? false;
     form.tags = props.site?.tags.join(", ") ?? "";
     form.note = props.site?.note ?? "";
@@ -65,6 +69,7 @@ function submit() {
     iconType: form.iconType,
     iconValue: form.iconValue || form.name.slice(0, 1).toUpperCase() || "S",
     iconBg: form.iconBg,
+    iconColor: form.iconColor,
     favorite: form.favorite,
     tags: splitLines(form.tags),
     note: form.note
@@ -117,17 +122,40 @@ function submit() {
         </label>
       </div>
 
-      <div class="swatch-row">
-        <span>图标颜色</span>
-        <button
-          v-for="color in colors"
-          :key="color"
-          class="swatch"
-          :class="{ selected: form.iconBg === color }"
-          :style="{ background: color }"
-          type="button"
-          @click="form.iconBg = color"
+      <div class="icon-color-editor">
+        <BrandMark
+          :icon-type="form.iconType"
+          :icon-value="form.iconValue || form.name.slice(0, 1).toUpperCase() || 'S'"
+          :icon-bg="form.iconBg"
+          :icon-color="form.iconColor"
+          :size="44"
         />
+        <div>
+          <div class="swatch-row">
+            <span>背景颜色</span>
+            <button
+              v-for="color in backgroundColors"
+              :key="color"
+              class="swatch"
+              :class="{ selected: form.iconBg === color }"
+              :style="{ background: color }"
+              type="button"
+              @click="form.iconBg = color"
+            />
+          </div>
+          <div class="swatch-row">
+            <span>文字颜色</span>
+            <button
+              v-for="color in textColors"
+              :key="color"
+              class="swatch"
+              :class="{ selected: form.iconColor === color }"
+              :style="{ background: color }"
+              type="button"
+              @click="form.iconColor = color"
+            />
+          </div>
+        </div>
       </div>
 
       <label>

@@ -42,7 +42,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     const payload = jwt.verify(token, env.jwtSecret) as TokenPayload;
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true, name: true, cryptoSalt: true }
+      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true }
     });
 
     if (!user) {
@@ -61,6 +61,7 @@ export function publicUser(user: AuthUser) {
   return {
     id: user.id,
     email: user.email,
-    name: user.name
+    name: user.name,
+    isAdmin: user.isAdmin
   };
 }

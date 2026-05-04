@@ -3,6 +3,7 @@ export type AuthUser = {
   email: string;
   name: string | null;
   cryptoSalt: string;
+  isAdmin: boolean;
 };
 
 declare global {

@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../src/server/db";
 import { demoSites, demoUser } from "../src/server/services/demoData";
+import { setRegistrationEnabled } from "../src/server/services/bootstrap";
 import { ensureDefaultCategories } from "../src/server/services/defaults";
 import { createUserSalt, encryptSecret } from "../src/server/utils/crypto";
 import { evaluateStrength } from "../src/server/utils/password";
@@ -9,6 +10,7 @@ async function main() {
   await prisma.account.deleteMany();
   await prisma.site.deleteMany();
   await prisma.category.deleteMany();
+  await prisma.appSetting.deleteMany();
   await prisma.user.deleteMany();
 
   const cryptoSalt = createUserSalt();
@@ -17,9 +19,12 @@ async function main() {
       email: demoUser.email,
       name: demoUser.name,
       passwordHash: await bcrypt.hash(demoUser.password, 12),
-      cryptoSalt
+      cryptoSalt,
+      isAdmin: true
     }
   });
+
+  await setRegistrationEnabled(true);
 
   await ensureDefaultCategories((category) =>
     prisma.category.upsert({
@@ -48,6 +53,7 @@ async function main() {
         iconType: site.iconType,
         iconValue: site.iconValue,
         iconBg: site.iconBg,
+        iconColor: site.iconColor,
         favorite: site.favorite,
         tags: JSON.stringify(site.tags),
         note: site.note,

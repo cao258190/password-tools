@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { KeyRound, Loader2, LockKeyhole, ShieldCheck } from "lucide-vue-next";
 import { useAuthStore } from "../stores/auth";
@@ -14,8 +14,23 @@ const error = ref("");
 
 const title = computed(() => (mode.value === "login" ? "欢迎回来" : "创建保险库"));
 
+watch(
+  () => auth.publicSettings.registrationEnabled,
+  (enabled) => {
+    if (!enabled && mode.value === "register") mode.value = "login";
+  }
+);
+
+onMounted(() => {
+  void auth.loadPublicSettings().catch(() => undefined);
+});
+
 async function submit() {
   error.value = "";
+  if (mode.value === "register" && !auth.publicSettings.registrationEnabled) {
+    error.value = "管理员已关闭新用户注册";
+    return;
+  }
   try {
     if (mode.value === "login") {
       await auth.login(email.value, password.value);
@@ -49,7 +64,7 @@ async function useDemo() {
       <div class="auth-copy">
         <LockKeyhole :size="30" />
         <h1>{{ title }}</h1>
-        <p>登录后进入本地加密密码库，示例账号已内置 Google、GitHub、支付宝等数据。</p>
+        <p>登录后进入本地加密密码库，管理员可控制是否开放新用户注册。</p>
       </div>
 
       <form class="auth-form" @submit.prevent="submit">
@@ -75,10 +90,21 @@ async function useDemo() {
 
       <div class="auth-actions">
         <button class="ghost" type="button" @click="useDemo">使用演示账号</button>
-        <button class="link-button" type="button" @click="mode = mode === 'login' ? 'register' : 'login'">
-          {{ mode === "login" ? "注册新账号" : "返回登录" }}
+        <button
+          v-if="mode === 'login' && auth.publicSettings.registrationEnabled"
+          class="link-button"
+          type="button"
+          @click="mode = 'register'"
+        >
+          注册新账号
+        </button>
+        <button v-else-if="mode === 'register'" class="link-button" type="button" @click="mode = 'login'">
+          返回登录
         </button>
       </div>
+      <p v-if="mode === 'login' && !auth.publicSettings.registrationEnabled" class="auth-note">
+        新用户注册已关闭，请使用管理员分配的账号登录。
+      </p>
     </section>
   </main>
 </template>
