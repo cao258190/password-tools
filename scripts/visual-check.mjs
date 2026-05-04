@@ -90,6 +90,11 @@ async function main() {
   await delay(2500);
 
   const sizes = [
+    { width: 390, height: 844, name: "ui-check-mobile-filters.png", mobile: true, view: "filters" },
+    { width: 390, height: 844, name: "ui-check-mobile-sites.png", mobile: true, view: "sites" },
+    { width: 390, height: 844, name: "ui-check-mobile-detail.png", mobile: true, view: "detail" },
+    { width: 390, height: 844, name: "ui-check-mobile-accounts.png", mobile: true, view: "accounts" },
+    { width: 768, height: 1024, name: "ui-check-tablet.png", mobile: true, view: "sites" },
     { width: 1024, height: 682, name: "ui-check-1024.png" },
     { width: 1440, height: 900, name: "ui-check-1440.png" },
     { width: 1920, height: 1080, name: "ui-check-1920.png" }
@@ -101,12 +106,32 @@ async function main() {
       width: size.width,
       height: size.height,
       deviceScaleFactor: 1,
-      mobile: false
+      mobile: Boolean(size.mobile)
     });
     await delay(800);
+    if (size.view) {
+      await evaluate(`(() => {
+        const views = { filters: 1, sites: 2, detail: 3, accounts: 4 };
+        const index = views[${JSON.stringify(size.view)}];
+        const button = document.querySelector(\`.mobile-bottom-nav button:nth-child(\${index})\`);
+        if (button && !button.disabled) button.click();
+      })()`);
+      await delay(400);
+    }
     const check = await evaluate(`(() => {
       const scrollWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
       const text = document.body.innerText;
+      const bottomNav = document.querySelector('.mobile-bottom-nav');
+      const visiblePane = ['filters', 'sites', 'detail', 'accounts'].find((view) => {
+        const selector = {
+          filters: '.sidebar',
+          sites: '.site-list-pane',
+          detail: '.detail-pane',
+          accounts: '.account-pane'
+        }[view];
+        const pane = document.querySelector(selector);
+        return pane && getComputedStyle(pane).display !== 'none';
+      }) || '';
       return {
         title: document.querySelector('.detail-title h1')?.textContent || '',
         accountCards: document.querySelectorAll('.account-card').length,
@@ -114,6 +139,9 @@ async function main() {
         hasSelected: Boolean(document.querySelector('.site-row.selected')),
         scrollWidth,
         innerWidth: window.innerWidth,
+        hasHorizontalOverflow: scrollWidth > window.innerWidth + 2,
+        bottomNavVisible: bottomNav ? getComputedStyle(bottomNav).display !== 'none' : false,
+        visiblePane,
         hasGoogle: text.includes('Google'),
         hasPrimary: text.includes('user.primary@gmail.com')
       };

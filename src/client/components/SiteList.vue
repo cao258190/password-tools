@@ -7,6 +7,9 @@ import { relativeTime } from "../utils/password";
 import { useDismissableLayer } from "../composables/useDismissableLayer";
 
 const vault = useVaultStore();
+const emit = defineEmits<{
+  selected: [];
+}>();
 const categoryMenuOpen = ref(false);
 const filterMenuOpen = ref(false);
 const categoryMenuHost = ref<HTMLElement | null>(null);
@@ -31,6 +34,11 @@ useDismissableLayer(
 function chooseCategory(id: string, name: string) {
   categoryMenuOpen.value = false;
   void vault.setCategory(name === "全部" ? "all" : id);
+}
+
+async function chooseSite(id: string) {
+  await vault.selectSite(id);
+  emit("selected");
 }
 </script>
 
@@ -110,7 +118,7 @@ function chooseCategory(id: string, name: string) {
         class="site-row"
         :class="{ selected: site.id === vault.selectedSiteId }"
         type="button"
-        @click="void vault.selectSite(site.id)"
+        @click="void chooseSite(site.id)"
       >
         <BrandMark :icon-type="site.iconType" :icon-value="site.iconValue" :icon-bg="site.iconBg" :icon-color="site.iconColor" :size="34" />
         <span class="site-row-main">

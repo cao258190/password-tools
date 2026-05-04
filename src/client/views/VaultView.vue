@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { FileText, FolderTree, ListChecks, UsersRound } from "lucide-vue-next";
 import AccountModal from "../components/AccountModal.vue";
 import AccountPanel from "../components/AccountPanel.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
@@ -30,6 +31,7 @@ const modalError = ref("");
 const toast = ref("");
 const settingsOpen = ref(false);
 const profileOpen = ref(false);
+const mobileView = ref<"filters" | "sites" | "detail" | "accounts">("sites");
 let toastTimer = 0;
 
 onMounted(() => {
@@ -40,6 +42,10 @@ function openCreateSite() {
   editingSite.value = null;
   modalError.value = "";
   siteModalOpen.value = true;
+}
+
+function openMobileView(view: typeof mobileView.value) {
+  mobileView.value = view;
 }
 
 function openEditSite(site: SiteDetailType) {
@@ -53,6 +59,10 @@ function openCreateAccount() {
   modalError.value = "";
   accountModalMode.value = "create";
   accountModalOpen.value = true;
+}
+
+function handleSiteSelected() {
+  mobileView.value = "detail";
 }
 
 function openEditAccount(account: Account) {
@@ -161,7 +171,7 @@ function showToast(message: string) {
 </script>
 
 <template>
-  <div class="vault-app">
+  <div class="vault-app" :class="`mobile-view-${mobileView}`">
     <TopBar
       :settings-open="settingsOpen"
       @open-settings="settingsOpen = true"
@@ -170,7 +180,7 @@ function showToast(message: string) {
     />
     <div class="vault-grid">
       <SidebarNav @add-site="openCreateSite" />
-      <SiteList />
+      <SiteList @selected="handleSiteSelected" />
       <SiteDetail
         :site="vault.selectedSite"
         :loading="vault.detailLoading"
@@ -189,6 +199,25 @@ function showToast(message: string) {
         @copied="showToast"
       />
     </div>
+
+    <nav class="mobile-bottom-nav" aria-label="移动端导航">
+      <button type="button" :class="{ active: mobileView === 'filters' }" @click="openMobileView('filters')">
+        <FolderTree :size="18" />
+        分类
+      </button>
+      <button type="button" :class="{ active: mobileView === 'sites' }" @click="openMobileView('sites')">
+        <ListChecks :size="18" />
+        网站
+      </button>
+      <button type="button" :class="{ active: mobileView === 'detail' }" :disabled="!vault.selectedSite && !vault.detailLoading" @click="openMobileView('detail')">
+        <FileText :size="18" />
+        详情
+      </button>
+      <button type="button" :class="{ active: mobileView === 'accounts' }" :disabled="!vault.selectedSite" @click="openMobileView('accounts')">
+        <UsersRound :size="18" />
+        账号
+      </button>
+    </nav>
 
     <p v-if="modalError" class="floating-error">{{ modalError }}</p>
     <p v-if="toast" class="floating-toast">{{ toast }}</p>
