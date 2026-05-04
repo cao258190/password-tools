@@ -22,12 +22,22 @@ export class ApiError extends Error {
   }
 }
 
+function cookieValue(name: string) {
+  return document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const csrfToken = cookieValue("vault_csrf");
   const response = await fetch(path, {
     ...options,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": decodeURIComponent(csrfToken) } : {}),
       ...(options.headers ?? {})
     }
   });

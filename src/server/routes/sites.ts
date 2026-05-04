@@ -7,6 +7,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { decryptSecret, encryptSecret } from "../utils/crypto.js";
 import { parseStringArray, stringifyStringArray } from "../utils/json.js";
 import { evaluateStrength } from "../utils/password.js";
+import { colorSchema } from "../utils/validation.js";
 
 export const sitesRouter = Router();
 
@@ -25,8 +26,8 @@ const siteCreateSchema = z.object({
   categoryId: z.string().nullable().optional(),
   iconType: z.string().trim().min(1).max(24).default("letter"),
   iconValue: z.string().trim().min(1).max(8).default("S"),
-  iconBg: z.string().trim().min(1).max(32).default("#2563eb"),
-  iconColor: z.string().trim().min(1).max(32).default("#ffffff"),
+  iconBg: colorSchema.default("#2563eb"),
+  iconColor: colorSchema.default("#ffffff"),
   favorite: z.boolean().default(false),
   tags: z.array(z.string().trim().min(1).max(20)).default([]),
   note: z.string().trim().max(800).optional(),

@@ -13,6 +13,7 @@ import { publicRouter } from "./routes/public.js";
 import { sitesRouter } from "./routes/sites.js";
 import { statsRouter } from "./routes/stats.js";
 import { tagsRouter } from "./routes/tags.js";
+import { csrfProtection, securityHeaders } from "./middleware/security.js";
 
 export function createApp() {
   const app = express();
@@ -23,8 +24,10 @@ export function createApp() {
       credentials: true
     })
   );
+  app.use(securityHeaders);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  app.use(csrfProtection);
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });

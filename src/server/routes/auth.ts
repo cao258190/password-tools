@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { HttpError, asyncHandler } from "../http.js";
 import { clearAuthCookie, publicUser, requireAuth, setAuthCookie } from "../middleware/auth.js";
+import { rateLimit } from "../middleware/security.js";
 import { getRegistrationEnabled } from "../services/bootstrap.js";
 import { createUserSalt } from "../utils/crypto.js";
 
@@ -27,6 +28,12 @@ const passwordSchema = z.object({
 
 authRouter.post(
   "/register",
+  rateLimit({
+    keyPrefix: "register",
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: "注册尝试过于频繁，请稍后再试"
+  }),
   asyncHandler(async (req, res) => {
     const input = authSchema.parse(req.body);
     const registrationEnabled = await getRegistrationEnabled();
@@ -56,6 +63,12 @@ authRouter.post(
 
 authRouter.post(
   "/login",
+  rateLimit({
+    keyPrefix: "login",
+    windowMs: 15 * 60 * 1000,
+    max: 8,
+    message: "登录尝试过于频繁，请 15 分钟后再试"
+  }),
   asyncHandler(async (req, res) => {
     const input = authSchema.pick({ email: true, password: true }).parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: input.email } });

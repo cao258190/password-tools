@@ -6,6 +6,7 @@ import { bootstrapSystem, setRegistrationEnabled } from "../../src/server/servic
 import { defaultCategories } from "../../src/server/services/defaults";
 
 const app = createApp();
+const csrfHeader = "X-CSRF-Token";
 
 async function clearDatabase() {
   await prisma.account.deleteMany();
@@ -17,10 +18,30 @@ async function clearDatabase() {
 
 async function registerAgent(email: string) {
   const agent = request.agent(app);
+  const token = await csrfToken(agent);
   await agent
     .post("/api/auth/register")
+    .set(csrfHeader, token)
     .send({ email, password: "testpass123", name: "T" })
     .expect(201);
+  return agent;
+}
+
+async function csrfToken(agent: request.SuperAgentTest) {
+  const response = await agent.get("/api/public/settings").expect(200);
+  const cookie = response.headers["set-cookie"]
+    ?.map((item: string) => item.split(";")[0])
+    .find((item: string) => item.startsWith("vault_csrf="));
+  if (!cookie) throw new Error("Missing CSRF cookie");
+  return decodeURIComponent(cookie.slice("vault_csrf=".length));
+}
+
+async function loginAgent(email = "admin@example.com", password = "admin123456") {
+  const agent = request.agent(app);
+  await agent
+    .post("/api/auth/login")
+    .send({ email, password })
+    .expect(200);
   return agent;
 }
 
@@ -46,30 +67,72 @@ describe("password vault API", () => {
   it("creates a default admin and lets only admins control registration", async () => {
     await setRegistrationEnabled(false);
 
-    await request(app)
+    const blockedAgent = request.agent(app);
+    await blockedAgent
       .post("/api/auth/register")
+      .set(csrfHeader, await csrfToken(blockedAgent))
       .send({ email: "blocked@example.com", password: "testpass123", name: "B" })
       .expect(403);
 
-    const admin = request.agent(app);
-    const loggedIn = await admin
-      .post("/api/auth/login")
-      .send({ email: "admin@example.com", password: "admin123456" })
-      .expect(200);
+    const admin = await loginAgent();
+    const loggedIn = await admin.get("/api/auth/me").expect(200);
     expect(loggedIn.body.user.isAdmin).toBe(true);
+    const adminCsrf = await csrfToken(admin);
 
     const disabled = await admin.get("/api/admin/settings").expect(200);
     expect(disabled.body.settings.registrationEnabled).toBe(false);
 
-    await admin.patch("/api/admin/settings").send({ registrationEnabled: true }).expect(200);
+    await admin
+      .patch("/api/admin/settings")
+      .set(csrfHeader, adminCsrf)
+      .send({ registrationEnabled: true })
+      .expect(200);
 
-    await request(app)
+    const guest = request.agent(app);
+    const guestCsrf = await csrfToken(guest);
+    await guest
       .post("/api/auth/register")
+      .set(csrfHeader, guestCsrf)
       .send({ email: "opened@example.com", password: "testpass123", name: "O" })
       .expect(201);
 
     const normalUser = await registerAgent("normal@example.com");
-    await normalUser.patch("/api/admin/settings").send({ registrationEnabled: false }).expect(403);
+    await normalUser
+      .patch("/api/admin/settings")
+      .set(csrfHeader, await csrfToken(normalUser))
+      .send({ registrationEnabled: false })
+      .expect(403);
+  });
+
+  it("rejects mutating requests without CSRF token", async () => {
+    const agent = await registerAgent("csrf@example.com");
+
+    await agent
+      .post("/api/sites")
+      .send({
+        name: "No CSRF",
+        primaryUrl: "https://csrf.example.com",
+        backupUrls: [],
+        tags: [],
+        accounts: []
+      })
+      .expect(403);
+  });
+
+  it("rate limits repeated failed login attempts", async () => {
+    const agent = request.agent(app);
+
+    for (let index = 0; index < 8; index += 1) {
+      await agent
+        .post("/api/auth/login")
+        .send({ email: "missing@example.com", password: "wrongpass123" })
+        .expect(401);
+    }
+
+    await agent
+      .post("/api/auth/login")
+      .send({ email: "missing@example.com", password: "wrongpass123" })
+      .expect(429);
   });
 
   it("uses one shared fixed category set for every user", async () => {
@@ -90,9 +153,11 @@ describe("password vault API", () => {
 
   it("updates profile information and changes password", async () => {
     const agent = await registerAgent("profile@example.com");
+    const token = await csrfToken(agent);
 
     const updated = await agent
       .patch("/api/auth/profile")
+      .set(csrfHeader, token)
       .send({ email: "profile-new@example.com", name: "New Name" })
       .expect(200);
 
@@ -101,15 +166,17 @@ describe("password vault API", () => {
 
     await agent
       .patch("/api/auth/password")
+      .set(csrfHeader, token)
       .send({ currentPassword: "wrongpass", newPassword: "newpass123" })
       .expect(400);
 
     await agent
       .patch("/api/auth/password")
+      .set(csrfHeader, token)
       .send({ currentPassword: "testpass123", newPassword: "newpass123" })
       .expect(204);
 
-    await agent.post("/api/auth/logout").expect(204);
+    await agent.post("/api/auth/logout").set(csrfHeader, token).expect(204);
     await agent
       .post("/api/auth/login")
       .send({ email: "profile-new@example.com", password: "testpass123" })
@@ -122,6 +189,7 @@ describe("password vault API", () => {
 
   it("creates sites with encrypted account passwords and decrypts for the owner", async () => {
     const agent = await registerAgent("owner@example.com");
+    const token = await csrfToken(agent);
     const categories = await agent.get("/api/categories").expect(200);
     const work = categories.body.categories.find(
       (category: { name: string }) => category.name === "工作"
@@ -129,6 +197,7 @@ describe("password vault API", () => {
 
     const created = await agent
       .post("/api/sites")
+      .set(csrfHeader, token)
       .send({
         name: "Example",
         primaryUrl: "https://example.com",
@@ -161,10 +230,30 @@ describe("password vault API", () => {
     expect(detail.body.site.accountCount).toBe(1);
   });
 
+  it("rejects unsafe color values for icon styles", async () => {
+    const agent = await registerAgent("color@example.com");
+
+    await agent
+      .post("/api/sites")
+      .set(csrfHeader, await csrfToken(agent))
+      .send({
+        name: "Unsafe Color",
+        primaryUrl: "https://color.example.com",
+        backupUrls: [],
+        iconBg: "url(javascript:alert(1))",
+        iconColor: "#ffffff",
+        tags: [],
+        accounts: []
+      })
+      .expect(400);
+  });
+
   it("records viewing time without changing modified time", async () => {
     const agent = await registerAgent("view-time@example.com");
+    const token = await csrfToken(agent);
     const created = await agent
       .post("/api/sites")
+      .set(csrfHeader, token)
       .send({
         name: "Viewed",
         primaryUrl: "https://viewed.example.com",
@@ -189,9 +278,12 @@ describe("password vault API", () => {
   it("keeps resources isolated between users", async () => {
     const owner = await registerAgent("owner@example.com");
     const other = await registerAgent("other@example.com");
+    const ownerToken = await csrfToken(owner);
+    const otherToken = await csrfToken(other);
 
     const created = await owner
       .post("/api/sites")
+      .set(csrfHeader, ownerToken)
       .send({
         name: "Private",
         primaryUrl: "https://private.example.com",
@@ -202,14 +294,20 @@ describe("password vault API", () => {
       .expect(201);
 
     await other.get(`/api/sites/${created.body.site.id}`).expect(404);
-    await other.patch(`/api/sites/${created.body.site.id}`).send({ name: "Stolen" }).expect(404);
+    await other
+      .patch(`/api/sites/${created.body.site.id}`)
+      .set(csrfHeader, otherToken)
+      .send({ name: "Stolen" })
+      .expect(404);
   });
 
   it("searches site, tag, note, and account fields", async () => {
     const agent = await registerAgent("search@example.com");
+    const token = await csrfToken(agent);
 
     await agent
       .post("/api/sites")
+      .set(csrfHeader, token)
       .send({
         name: "GitHub",
         primaryUrl: "https://github.com",
@@ -235,9 +333,11 @@ describe("password vault API", () => {
 
   it("returns tag counts for sidebar filters", async () => {
     const agent = await registerAgent("tags@example.com");
+    const token = await csrfToken(agent);
 
     await agent
       .post("/api/sites")
+      .set(csrfHeader, token)
       .send({
         name: "Google",
         primaryUrl: "https://google.com",
@@ -249,6 +349,7 @@ describe("password vault API", () => {
 
     await agent
       .post("/api/sites")
+      .set(csrfHeader, token)
       .send({
         name: "Alipay",
         primaryUrl: "https://alipay.com",
@@ -265,7 +366,11 @@ describe("password vault API", () => {
 
   it("generates strong passwords", async () => {
     const agent = await registerAgent("generator@example.com");
-    const response = await agent.post("/api/password/generate").send({ length: 20 }).expect(200);
+    const response = await agent
+      .post("/api/password/generate")
+      .set(csrfHeader, await csrfToken(agent))
+      .send({ length: 20 })
+      .expect(200);
 
     expect(response.body.password).toHaveLength(20);
     expect(response.body.strength).toBe("strong");
