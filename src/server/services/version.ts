@@ -298,6 +298,9 @@ export async function runUpdate(targetVersion?: string) {
   }
 
   const normalizedTargetVersion = normalizeTargetVersion(targetVersion);
+  if (normalizedTargetVersion && normalizeVersion(normalizedTargetVersion) === normalizeVersion(localVersion())) {
+    throw new HttpError(400, "目标版本与当前版本一致，无需更新");
+  }
   updateRunning = true;
   lastUpdate = {
     status: "running",

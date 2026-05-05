@@ -153,6 +153,12 @@ describe("password vault API", () => {
     expect(version.body.version.updateEnabled).toBe(true);
     expect(version.body.version.releaseVersions.map((item: { version: string }) => item.version)).toEqual(["v9.9.9", "v9.8.0"]);
 
+    await admin
+      .post("/api/admin/update")
+      .set(csrfHeader, token)
+      .send({ targetVersion: version.body.version.currentVersion })
+      .expect(400);
+
     const update = await admin.post("/api/admin/update").set(csrfHeader, token).send({ targetVersion: "9.8.0" }).expect(202);
     expect(update.body.update.status).toBe("running");
     expect(update.body.update.targetVersion).toBe("v9.8.0");

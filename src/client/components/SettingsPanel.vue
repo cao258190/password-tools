@@ -48,6 +48,17 @@ const selectableVersions = computed(() => {
   });
 });
 const selectedTargetVersion = computed(() => targetVersion.value || versionInfo.value?.latestVersion || "");
+const targetMatchesCurrent = computed(() => {
+  if (!versionInfo.value || !selectedTargetVersion.value) return false;
+  return normalizeVersion(selectedTargetVersion.value) === normalizeVersion(versionInfo.value.currentVersion);
+});
+const canRunVersionUpdate = computed(
+  () => Boolean(versionInfo.value?.updateEnabled) && Boolean(selectedTargetVersion.value) && !targetMatchesCurrent.value && !versionInfo.value?.updateRunning
+);
+
+function normalizeVersion(version: string) {
+  return version.trim().replace(/^v/i, "");
+}
 
 function updateKey(update: UpdateStatus) {
   return `${update.startedAt}:${update.finishedAt ?? ""}:${update.status}`;
@@ -282,6 +293,7 @@ onBeforeUnmount(() => {
             </select>
           </label>
           <p v-if="!versionInfo?.updateEnabled">Web 在线更新未启用，请在服务器配置 WEB_UPDATE_ENABLED 和 UPDATE_COMMAND。</p>
+          <p v-else-if="targetMatchesCurrent">当前已是 {{ selectedTargetVersion }}，无需重复更新。</p>
           <p v-else-if="selectedTargetVersion">将更新到 {{ selectedTargetVersion }}，更新完成后会提示是否刷新页面。</p>
           <p v-else>当前部署未检测到可用更新。</p>
           <p v-if="versionError" class="form-error">{{ versionError }}</p>
@@ -305,7 +317,7 @@ onBeforeUnmount(() => {
             <button
               class="primary"
               type="button"
-              :disabled="!versionInfo?.updateEnabled || !selectedTargetVersion || versionInfo?.updateRunning"
+              :disabled="!canRunVersionUpdate"
               @click="updateConfirmOpen = true"
             >
               <DownloadCloud :size="16" />
