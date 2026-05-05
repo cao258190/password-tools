@@ -40,7 +40,7 @@ async function writeClipboard(text: string) {
       return true;
     }
   } catch {
-    // Fall through to the textarea fallback below.
+    // 继续使用下面的 textarea 兜底方案。
   }
 
   const textarea = document.createElement("textarea");
