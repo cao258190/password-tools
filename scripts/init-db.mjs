@@ -250,7 +250,7 @@ insertSetting.run(
 );
 
 const existingAdmin = db
-  .prepare(`SELECT "id", "isAdmin" FROM "User" WHERE "email" = ?`)
+  .prepare(`SELECT "id", "isAdmin", "passwordHash" FROM "User" WHERE "email" = ?`)
   .get(adminEmail);
 if (!existingAdmin) {
   db.prepare(`
@@ -265,11 +265,20 @@ VALUES (?, ?, ?, ?, ?, true, ?, ?)
     now,
     now
   );
-} else if (!existingAdmin.isAdmin) {
-  db.prepare(`UPDATE "User" SET "isAdmin" = true, "updatedAt" = ? WHERE "id" = ?`).run(
-    now,
-    existingAdmin.id
-  );
+} else {
+  const shouldPromoteAdmin = !existingAdmin.isAdmin;
+  const shouldReplaceDefaultPassword =
+    adminPassword !== defaultAdminPassword &&
+    (await bcrypt.compare(defaultAdminPassword, existingAdmin.passwordHash));
+
+  if (shouldPromoteAdmin || shouldReplaceDefaultPassword) {
+    const passwordHash = shouldReplaceDefaultPassword
+      ? await bcrypt.hash(adminPassword, 12)
+      : existingAdmin.passwordHash;
+    db.prepare(
+      `UPDATE "User" SET "isAdmin" = true, "passwordHash" = ?, "updatedAt" = ? WHERE "id" = ?`
+    ).run(passwordHash, now, existingAdmin.id);
+  }
 }
 
 db.close();
