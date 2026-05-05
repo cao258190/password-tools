@@ -6,6 +6,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY index.html vite.config.ts tsconfig*.json ./
+COPY public ./public
 COPY src ./src
 COPY 1895-0-preview-c30a4b87-0abd-4d56-b0ac-e0a71f73f1e3.jpg ./
 RUN npm run build:client
