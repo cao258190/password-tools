@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { Database, DownloadCloud, ExternalLink, Moon, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-vue-next";
+import { CheckCircle2, Database, DownloadCloud, ExternalLink, Moon, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-vue-next";
 import ModalFrame from "./ModalFrame.vue";
 import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import { useVaultStore } from "../stores/vault";
-import type { VersionInfo } from "../types";
+import type { UpdateStatus, VersionInfo } from "../types";
 
 const props = defineProps<{
   open: boolean;
@@ -24,8 +24,11 @@ const versionInfo = ref<VersionInfo | null>(null);
 const versionLoading = ref(false);
 const versionError = ref("");
 const updateConfirmOpen = ref(false);
+const updateRefreshOpen = ref(false);
+const targetVersion = ref("");
 let updateTimer = 0;
 let updateWasRunning = false;
+let promptedUpdateKey = "";
 
 const updateStatusText = computed(() => {
   if (!versionInfo.value) return "尚未检测";
@@ -35,6 +38,20 @@ const updateStatusText = computed(() => {
 });
 
 const lastUpdateOutput = computed(() => versionInfo.value?.lastUpdate?.output.trim() || "");
+const selectableVersions = computed(() => {
+  const releases = versionInfo.value?.releaseVersions ?? [];
+  const seen = new Set<string>();
+  return releases.filter((release) => {
+    if (seen.has(release.version)) return false;
+    seen.add(release.version);
+    return true;
+  });
+});
+const selectedTargetVersion = computed(() => targetVersion.value || versionInfo.value?.latestVersion || "");
+
+function updateKey(update: UpdateStatus) {
+  return `${update.startedAt}:${update.finishedAt ?? ""}:${update.status}`;
+}
 
 async function loadAdminSettings() {
   if (!auth.user?.isAdmin) return;
@@ -54,6 +71,9 @@ async function loadVersion(force = false) {
   try {
     const { version } = await api.adminVersion(force);
     versionInfo.value = version;
+    if (!targetVersion.value && version.latestVersion) {
+      targetVersion.value = version.latestVersion;
+    }
   } catch (error) {
     versionError.value = error instanceof Error ? error.message : "检测版本失败";
   } finally {
@@ -84,12 +104,22 @@ async function refreshUpdateStatus() {
       if (updateWasRunning) {
         updateWasRunning = false;
         void loadVersion(true);
+        if (status.lastUpdate?.status === "success") {
+          const key = updateKey(status.lastUpdate);
+          if (key !== promptedUpdateKey) {
+            promptedUpdateKey = key;
+            updateRefreshOpen.value = true;
+          }
+        }
       }
     }
   } catch {
     if (updateTimer) {
       window.clearTimeout(updateTimer);
       updateTimer = 0;
+    }
+    if (updateWasRunning) {
+      scheduleUpdateRefresh();
     }
   }
 }
@@ -106,7 +136,8 @@ async function runVersionUpdate() {
   if (!auth.user?.isAdmin) return;
   versionError.value = "";
   try {
-    const { update } = await api.runUpdate();
+    const { update } = await api.runUpdate({ targetVersion: selectedTargetVersion.value || undefined });
+    updateWasRunning = update.status === "running";
     if (versionInfo.value) {
       versionInfo.value = {
         ...versionInfo.value,
@@ -118,6 +149,10 @@ async function runVersionUpdate() {
   } catch (error) {
     versionError.value = error instanceof Error ? error.message : "启动更新失败";
   }
+}
+
+function refreshPage() {
+  window.location.reload();
 }
 
 async function toggleRegistration() {
@@ -235,8 +270,19 @@ onBeforeUnmount(() => {
               {{ versionInfo.latestSha.slice(0, 12) }}
             </span>
           </div>
+          <label v-if="selectableVersions.length" class="version-target-row">
+            <span>
+              <strong>目标版本</strong>
+              <small>可选择最新版本或回退到历史 Release</small>
+            </span>
+            <select v-model="targetVersion" :disabled="versionInfo?.updateRunning">
+              <option v-for="release in selectableVersions" :key="release.version" :value="release.version">
+                {{ release.version }}{{ release.prerelease ? " 预发布" : "" }}
+              </option>
+            </select>
+          </label>
           <p v-if="!versionInfo?.updateEnabled">Web 在线更新未启用，请在服务器配置 WEB_UPDATE_ENABLED 和 UPDATE_COMMAND。</p>
-          <p v-else-if="versionInfo.updateAvailable">检测到新版本，可直接在 Web 端触发服务器预配置更新命令。</p>
+          <p v-else-if="selectedTargetVersion">将更新到 {{ selectedTargetVersion }}，更新完成后会提示是否刷新页面。</p>
           <p v-else>当前部署未检测到可用更新。</p>
           <p v-if="versionError" class="form-error">{{ versionError }}</p>
           <div v-if="versionInfo?.lastUpdate" class="update-log">
@@ -259,7 +305,7 @@ onBeforeUnmount(() => {
             <button
               class="primary"
               type="button"
-              :disabled="!versionInfo?.updateEnabled || !versionInfo?.updateAvailable || versionInfo?.updateRunning"
+              :disabled="!versionInfo?.updateEnabled || !selectedTargetVersion || versionInfo?.updateRunning"
               @click="updateConfirmOpen = true"
             >
               <DownloadCloud :size="16" />
@@ -310,11 +356,22 @@ onBeforeUnmount(() => {
   <ModalFrame :open="updateConfirmOpen" title="确认在线更新" @close="updateConfirmOpen = false">
     <div class="confirm-body">
       <DownloadCloud :size="28" />
-      <p>确认执行服务器预配置的更新命令？更新过程中服务可能短暂不可用。</p>
+      <p>确认更新到 {{ selectedTargetVersion || "所选版本" }}？更新过程中服务可能短暂不可用。</p>
     </div>
     <footer class="modal-footer">
       <button class="secondary" type="button" @click="updateConfirmOpen = false">取消</button>
       <button class="danger" type="button" @click="runVersionUpdate">确认更新</button>
+    </footer>
+  </ModalFrame>
+
+  <ModalFrame :open="updateRefreshOpen" title="更新完成" @close="updateRefreshOpen = false">
+    <div class="confirm-body success">
+      <CheckCircle2 :size="28" />
+      <p>新版本已部署完成。是否立即刷新页面以加载最新前端资源？</p>
+    </div>
+    <footer class="modal-footer">
+      <button class="secondary" type="button" @click="updateRefreshOpen = false">稍后刷新</button>
+      <button class="primary" type="button" @click="refreshPage">立即刷新</button>
     </footer>
   </ModalFrame>
 </template>

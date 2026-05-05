@@ -1219,6 +1219,10 @@ a {
   flex: none;
 }
 
+.confirm-body.success svg {
+  color: #22c55e;
+}
+
 .settings-panel {
   display: flex;
   flex-direction: column;
@@ -1388,6 +1392,46 @@ a {
 
 .version-facts {
   gap: 7px;
+}
+
+.version-target-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #25364f;
+  border-radius: 8px;
+  background: #0d1420;
+}
+
+.version-target-row span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.version-target-row strong {
+  color: #eef6ff;
+  font-size: 12px;
+}
+
+.version-target-row small {
+  color: #8fa1b8;
+  font-size: 11px;
+}
+
+.version-target-row select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  color: #e8f1ff;
+  border: 1px solid #263a55;
+  border-radius: 8px;
+  background: #111b2a;
+  font-size: 12px;
+  outline: none;
 }
 
 .version-actions {
@@ -1958,6 +2002,25 @@ html[data-theme="soft"] .version-card.running .version-badge {
   background: #f0fdf4;
 }
 
+html[data-theme="soft"] .version-target-row {
+  border-color: #d7e1ee;
+  background: #f7faff;
+}
+
+html[data-theme="soft"] .version-target-row strong {
+  color: #111827;
+}
+
+html[data-theme="soft"] .version-target-row small {
+  color: #718198;
+}
+
+html[data-theme="soft"] .version-target-row select {
+  color: #172033;
+  border-color: #d6e0ec;
+  background: #ffffff;
+}
+
 html[data-theme="soft"] .update-log {
   border-color: #d7e1ee;
   background: #f7faff;
@@ -2398,6 +2461,10 @@ html[data-theme="soft"] .profile-pill {
 
   .version-actions {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .version-target-row {
     grid-template-columns: 1fr;
   }
 

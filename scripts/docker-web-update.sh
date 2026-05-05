@@ -2,6 +2,7 @@
 set -eu
 
 branch="${UPDATE_CHECK_REF:-master}"
+target_version="${TARGET_VERSION:-}"
 project_dir="${UPDATE_PROJECT_DIR:-/workspace/password-tools}"
 host_project_dir="${UPDATE_HOST_PROJECT_DIR:-}"
 env_file="${UPDATE_ENV_FILE:-.env.docker}"
@@ -43,6 +44,7 @@ run_updater() {
     -e API_IMAGE="${API_IMAGE:-ghcr.io/cao258190/password-tools-api}" \
     -e WEB_IMAGE="${WEB_IMAGE:-ghcr.io/cao258190/password-tools-web}" \
     -e DOCKER_PULL_POLICY="${DOCKER_PULL_POLICY:-prefer}" \
+    -e TARGET_VERSION="$target_version" \
     -e UPDATE_CHECK_REF="$branch" \
     -e UPDATE_ENV_FILE="$env_file" \
     -e UPDATE_COMPOSE_FILE="$compose_file" \

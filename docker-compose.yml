@@ -1,11 +1,11 @@
 services:
   api:
-    image: ${API_IMAGE:-ghcr.io/cao258190/password-tools-api}:${APP_VERSION:-1.0.8}
+    image: ${API_IMAGE:-ghcr.io/cao258190/password-tools-api}:${APP_VERSION:-1.0.9}
     build:
       context: .
       dockerfile: Dockerfile.api
       args:
-        APP_VERSION: ${APP_VERSION:-1.0.8}
+        APP_VERSION: ${APP_VERSION:-1.0.9}
         APP_COMMIT: ${APP_COMMIT:-}
     container_name: password-tools-api
     restart: unless-stopped
@@ -45,7 +45,7 @@ services:
       start_period: 20s
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/cao258190/password-tools-web}:${APP_VERSION:-1.0.8}
+    image: ${WEB_IMAGE:-ghcr.io/cao258190/password-tools-web}:${APP_VERSION:-1.0.9}
     build:
       context: .
       dockerfile: Dockerfile.web

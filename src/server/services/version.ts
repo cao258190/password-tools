@@ -22,6 +22,7 @@ export type VersionInfo = {
   checkedAt: string;
   updateRunning: boolean;
   lastUpdate: UpdateStatus | null;
+  releaseVersions: ReleaseVersion[];
 };
 
 export type UpdateStatus = {
@@ -30,6 +31,14 @@ export type UpdateStatus = {
   finishedAt: string | null;
   message: string;
   output: string;
+  targetVersion?: string | null;
+};
+
+export type ReleaseVersion = {
+  version: string;
+  url: string | null;
+  publishedAt: string | null;
+  prerelease: boolean;
 };
 
 let cachedInfo: VersionInfo | null = null;
@@ -93,6 +102,11 @@ function currentUpdateState() {
 
 function normalizeVersion(version: string | null | undefined) {
   return (version ?? "").trim().replace(/^v/i, "");
+}
+
+function normalizeTargetVersion(version: string | null | undefined) {
+  const normalized = normalizeVersion(version);
+  return normalized ? `v${normalized}` : null;
 }
 
 function compareVersions(left: string, right: string) {
@@ -206,6 +220,23 @@ export async function checkVersion(force = false): Promise<VersionInfo> {
     tag_name?: string;
     html_url?: string;
   }>(`/repos/${env.githubOwner}/${env.githubRepo}/releases/latest`);
+  const releases =
+    (await githubJson<
+      {
+        tag_name?: string;
+        html_url?: string;
+        published_at?: string | null;
+        prerelease?: boolean;
+      }[]
+    >(`/repos/${env.githubOwner}/${env.githubRepo}/releases?per_page=20`)) ?? [];
+  const releaseVersions = releases
+    .filter((item) => typeof item.tag_name === "string" && item.tag_name.trim())
+    .map((item) => ({
+      version: normalizeTargetVersion(item.tag_name) ?? item.tag_name ?? "",
+      url: item.html_url ?? null,
+      publishedAt: item.published_at ?? null,
+      prerelease: Boolean(item.prerelease)
+    }));
 
   let latestVersion: string | null = release?.tag_name ?? null;
   let latestSha: string | null = null;
@@ -242,7 +273,8 @@ export async function checkVersion(force = false): Promise<VersionInfo> {
     source,
     checkedAt: new Date().toISOString(),
     updateRunning: updateState.updateRunning,
-    lastUpdate: updateState.lastUpdate
+    lastUpdate: updateState.lastUpdate,
+    releaseVersions
   };
   cachedAt = now;
   return cachedInfo;
@@ -257,7 +289,7 @@ export function getUpdateStatus() {
   };
 }
 
-export async function runUpdate() {
+export async function runUpdate(targetVersion?: string) {
   if (!env.webUpdateEnabled || !env.updateCommand) {
     throw new HttpError(403, "服务器未开启 Web 在线更新");
   }
@@ -265,13 +297,15 @@ export async function runUpdate() {
     throw new HttpError(409, "已有更新任务正在执行");
   }
 
+  const normalizedTargetVersion = normalizeTargetVersion(targetVersion);
   updateRunning = true;
   lastUpdate = {
     status: "running",
     startedAt: new Date().toISOString(),
     finishedAt: null,
-    message: "更新任务正在执行",
-    output: ""
+    message: normalizedTargetVersion ? `正在更新到 ${normalizedTargetVersion}` : "更新任务正在执行",
+    output: "",
+    targetVersion: normalizedTargetVersion
   };
   writeStoredUpdateStatus(lastUpdate);
 
@@ -281,7 +315,11 @@ export async function runUpdate() {
     cwd: process.cwd(),
     timeout: commandTimeout,
     windowsHide: true,
-    maxBuffer: 1024 * 1024
+    maxBuffer: 1024 * 1024,
+    env: {
+      ...process.env,
+      ...(normalizedTargetVersion ? { TARGET_VERSION: normalizedTargetVersion } : {})
+    }
   })
     .then((result) => {
       if (env.updateDetached) {

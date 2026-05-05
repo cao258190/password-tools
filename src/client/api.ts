@@ -101,8 +101,8 @@ export const api = {
       lastUpdate: UpdateStatus | null;
     }>("/api/admin/update");
   },
-  runUpdate() {
-    return request<{ update: UpdateStatus }>("/api/admin/update", withBody("POST"));
+  runUpdate(input: { targetVersion?: string } = {}) {
+    return request<{ update: UpdateStatus }>("/api/admin/update", withBody("POST", input));
   },
   categories() {
     return request<{ categories: Category[] }>("/api/categories");

@@ -53,7 +53,7 @@ GITHUB_REPO=password-tools
 UPDATE_CHECK_REF=master
 ```
 
-管理员可在“保险库设置”中检测 GitHub 最新 Release 版本号；如果仓库没有 Release，会回退读取 `UPDATE_CHECK_REF` 分支 `package.json` 中的 `version` 字段。是否有新版本只按版本号比较，不按提交信息判断。
+管理员可在“保险库设置”中检测 GitHub 最新 Release 版本号，并从最近的 Release 列表中选择要更新到的目标版本；如果仓库没有 Release，会回退读取 `UPDATE_CHECK_REF` 分支 `package.json` 中的 `version` 字段。是否有新版本只按版本号比较，不按提交信息判断。
 
 Web 在线更新默认开启，首次生成的 `.env.docker` 会写入：
 
@@ -71,7 +71,7 @@ WEB_IMAGE=ghcr.io/cao258190/password-tools-web
 DOCKER_PULL_POLICY=prefer
 ```
 
-`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Web 更新会先启动固定名称的后台更新器容器 `password-tools-updater`，由它在宿主机项目目录中执行 `git pull --ff-only`，然后通过挂载的 `/var/run/docker.sock` 更新前端与后端容器。更新状态会写入 `.update-status.json`，因此 API 容器被重建后页面仍能看到成功或失败结果。
+`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Web 更新会先启动固定名称的后台更新器容器 `password-tools-updater`。如果页面选择了目标版本，更新器会 checkout 到对应 tag；未指定时会更新 `UPDATE_CHECK_REF` 分支。随后通过挂载的 `/var/run/docker.sock` 更新前端与后端容器。更新状态会写入 `.update-status.json`，因此 API 容器被重建后页面仍能看到成功或失败结果。
 
 默认部署会优先拉取 GitHub Container Registry 上的预构建镜像：
 

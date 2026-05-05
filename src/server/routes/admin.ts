@@ -12,6 +12,14 @@ const settingsSchema = z.object({
   registrationEnabled: z.boolean()
 });
 
+const updateSchema = z.object({
+  targetVersion: z
+    .string()
+    .trim()
+    .regex(/^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/, "版本号格式无效")
+    .optional()
+});
+
 adminRouter.get(
   "/settings",
   requireAuth,
@@ -66,7 +74,8 @@ adminRouter.post(
   requireAuth,
   requireAdmin,
   asyncHandler(async (_req, res) => {
-    const update = await runUpdate();
+    const input = updateSchema.parse(_req.body ?? {});
+    const update = await runUpdate(input.targetVersion);
     res.status(202).json({ update });
   })
 );

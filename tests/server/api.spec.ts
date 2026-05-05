@@ -111,23 +111,51 @@ describe("password vault API", () => {
   it("lets admins check GitHub version and keeps the update endpoint admin-only", async () => {
     const admin = await loginAgent();
     const token = await csrfToken(admin);
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        tag_name: "v9.9.9",
-        html_url: "https://github.com/cao258190/password-tools/releases/tag/v9.9.9"
-      })
-    } as Response);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/releases/latest")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            tag_name: "v9.9.9",
+            html_url: "https://github.com/cao258190/password-tools/releases/tag/v9.9.9"
+          })
+        } as Response;
+      }
+      if (url.includes("/releases?")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              tag_name: "v9.9.9",
+              html_url: "https://github.com/cao258190/password-tools/releases/tag/v9.9.9",
+              published_at: "2026-05-05T00:00:00Z",
+              prerelease: false
+            },
+            {
+              tag_name: "v9.8.0",
+              html_url: "https://github.com/cao258190/password-tools/releases/tag/v9.8.0",
+              published_at: "2026-05-01T00:00:00Z",
+              prerelease: false
+            }
+          ]
+        } as Response;
+      }
+      throw new Error(`Unexpected GitHub URL: ${url}`);
+    });
 
     const version = await admin.get("/api/admin/version?force=true").expect(200);
     expect(fetchMock).toHaveBeenCalled();
     expect(version.body.version.latestVersion).toBe("v9.9.9");
     expect(version.body.version.updateAvailable).toBe(true);
     expect(version.body.version.updateEnabled).toBe(true);
+    expect(version.body.version.releaseVersions.map((item: { version: string }) => item.version)).toEqual(["v9.9.9", "v9.8.0"]);
 
-    const update = await admin.post("/api/admin/update").set(csrfHeader, token).expect(202);
+    const update = await admin.post("/api/admin/update").set(csrfHeader, token).send({ targetVersion: "9.8.0" }).expect(202);
     expect(update.body.update.status).toBe("running");
+    expect(update.body.update.targetVersion).toBe("v9.8.0");
 
     const normalUser = await registerAgent("not-admin@example.com");
     await normalUser.get("/api/admin/version?force=true").expect(403);
@@ -140,6 +168,9 @@ describe("password vault API", () => {
       const url = String(input);
       if (url.includes("/releases/latest")) {
         return { ok: false, status: 404 } as Response;
+      }
+      if (url.includes("/releases?")) {
+        return { ok: true, status: 200, json: async () => [] } as Response;
       }
       if (url.includes("/branches/")) {
         return {
@@ -162,7 +193,7 @@ describe("password vault API", () => {
     });
 
     const version = await admin.get("/api/admin/version?force=true").expect(200);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(version.body.version.latestVersion).toBe("9.9.9");
     expect(version.body.version.latestSha).toBe("abcdef1234567890");
     expect(version.body.version.source).toBe("package");

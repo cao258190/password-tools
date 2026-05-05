@@ -19,6 +19,14 @@ export type UpdateStatus = {
   finishedAt: string | null;
   message: string;
   output: string;
+  targetVersion?: string | null;
+};
+
+export type ReleaseVersion = {
+  version: string;
+  url: string | null;
+  publishedAt: string | null;
+  prerelease: boolean;
 };
 
 export type VersionInfo = {
@@ -33,6 +41,7 @@ export type VersionInfo = {
   checkedAt: string;
   updateRunning: boolean;
   lastUpdate: UpdateStatus | null;
+  releaseVersions: ReleaseVersion[];
 };
 
 export type Category = {
