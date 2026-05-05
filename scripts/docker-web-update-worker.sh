@@ -56,6 +56,14 @@ compose_up() {
   fi
 }
 
+cleanup_dangling_images() {
+  if docker image prune -f; then
+    echo "已自动清理未使用的 dangling 镜像。"
+  else
+    echo "dangling 镜像自动清理失败，请稍后手动执行 docker image prune -f。" >&2
+  fi
+}
+
 run_update() {
   git fetch origin "$branch" --tags
 
@@ -86,6 +94,7 @@ run_update() {
   export APP_COMMIT="$app_commit"
 
   compose_up
+  cleanup_dangling_images
   echo "Docker 服务已更新到 $app_commit，版本 $app_version。"
 }
 
