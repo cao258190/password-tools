@@ -15,7 +15,7 @@ export type VersionInfo = {
   latestUrl: string | null;
   updateAvailable: boolean;
   updateEnabled: boolean;
-  source: "release" | "branch";
+  source: "release" | "package";
   checkedAt: string;
   updateRunning: boolean;
   lastUpdate: UpdateStatus | null;
@@ -91,8 +91,39 @@ async function githubJson<T>(path: string) {
   }
 }
 
-function versionFromSha(sha: string | null) {
-  return sha ? `${env.updateCheckRef}-${sha.slice(0, 7)}` : null;
+async function githubText(path: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+  try {
+    const response = await fetch(`${githubApiBase}${path}`, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/vnd.github.raw",
+        "User-Agent": "password-tools-updater"
+      }
+    });
+
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new HttpError(response.status, `GitHub 检测失败：${response.statusText}`);
+    }
+    return await response.text();
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(502, "无法连接 GitHub 检测版本");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function parsePackageVersion(content: string | null) {
+  if (!content) return null;
+  try {
+    const packageJson = JSON.parse(content) as { version?: unknown };
+    return typeof packageJson.version === "string" ? packageJson.version : null;
+  } catch {
+    throw new HttpError(502, "GitHub package.json 版本格式无效");
+  }
 }
 
 export function localVersion() {
@@ -129,22 +160,18 @@ export async function checkVersion(force = false): Promise<VersionInfo> {
       html_url?: string;
     }>(`/repos/${env.githubOwner}/${env.githubRepo}/branches/${encodeURIComponent(env.updateCheckRef)}`);
     latestSha = branch?.commit?.sha ?? null;
-    latestVersion = versionFromSha(latestSha);
+    latestVersion = parsePackageVersion(
+      await githubText(
+        `/repos/${env.githubOwner}/${env.githubRepo}/contents/package.json?ref=${encodeURIComponent(env.updateCheckRef)}`
+      )
+    );
     latestUrl = branch?.html_url ?? `https://github.com/${env.githubOwner}/${env.githubRepo}`;
-    source = "branch";
+    source = "package";
   }
 
   const currentVersion = localVersion();
   const currentSha = currentCommit();
-  const updateAvailable = latestVersion
-    ? source === "release"
-      ? compareVersions(latestVersion, currentVersion) > 0
-      : Boolean(
-          latestSha &&
-            ((currentSha && latestSha !== currentSha) ||
-              (!currentSha && currentVersion.includes(latestSha.slice(0, 7)) === false && currentVersion !== "0.0.0"))
-        )
-    : false;
+  const updateAvailable = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
 
   cachedInfo = {
     currentVersion,

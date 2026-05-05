@@ -53,7 +53,7 @@ GITHUB_REPO=password-tools
 UPDATE_CHECK_REF=master
 ```
 
-管理员可在“保险库设置”中检测 GitHub 最新 Release；如果仓库没有 Release，会回退检测 `UPDATE_CHECK_REF` 分支最新提交。
+管理员可在“保险库设置”中检测 GitHub 最新 Release 版本号；如果仓库没有 Release，会回退读取 `UPDATE_CHECK_REF` 分支 `package.json` 中的 `version` 字段。是否有新版本只按版本号比较，不按提交信息判断。
 
 Web 在线更新默认开启，首次生成的 `.env.docker` 会写入：
 

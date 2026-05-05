@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
               <small v-if="versionInfo">检测时间：{{ new Date(versionInfo.checkedAt).toLocaleString("zh-CN") }}</small>
               <small v-else>从 GitHub 检测当前项目最新版本</small>
             </span>
-            <span class="version-badge">{{ versionInfo?.source === "release" ? "Release" : "GitHub" }}</span>
+            <span class="version-badge">{{ versionInfo?.source === "release" ? "Release" : "版本号" }}</span>
           </div>
           <div class="settings-facts version-facts">
             <span>
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
               {{ versionInfo?.latestVersion ?? "未检测到" }}
             </span>
             <span v-if="versionInfo?.latestSha">
-              <strong>最新提交</strong>
+              <strong>对应提交</strong>
               {{ versionInfo.latestSha.slice(0, 12) }}
             </span>
           </div>

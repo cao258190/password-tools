@@ -134,6 +134,41 @@ describe("password vault API", () => {
     await normalUser.post("/api/admin/update").set(csrfHeader, await csrfToken(normalUser)).expect(403);
   });
 
+  it("falls back to the repository package version instead of commit sha", async () => {
+    const admin = await loginAgent();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/releases/latest")) {
+        return { ok: false, status: 404 } as Response;
+      }
+      if (url.includes("/branches/")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            commit: { sha: "abcdef1234567890" },
+            html_url: "https://github.com/cao258190/password-tools/tree/master"
+          })
+        } as Response;
+      }
+      if (url.includes("/contents/package.json")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ version: "9.9.9" })
+        } as Response;
+      }
+      throw new Error(`Unexpected GitHub URL: ${url}`);
+    });
+
+    const version = await admin.get("/api/admin/version?force=true").expect(200);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(version.body.version.latestVersion).toBe("9.9.9");
+    expect(version.body.version.latestSha).toBe("abcdef1234567890");
+    expect(version.body.version.source).toBe("package");
+    expect(version.body.version.updateAvailable).toBe(true);
+  });
+
   it("rejects mutating requests without CSRF token", async () => {
     const agent = await registerAgent("csrf@example.com");
 

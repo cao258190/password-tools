@@ -29,7 +29,7 @@ export type VersionInfo = {
   latestUrl: string | null;
   updateAvailable: boolean;
   updateEnabled: boolean;
-  source: "release" | "branch";
+  source: "release" | "package";
   checkedAt: string;
   updateRunning: boolean;
   lastUpdate: UpdateStatus | null;
