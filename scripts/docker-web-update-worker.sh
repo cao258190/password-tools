@@ -34,8 +34,8 @@ run_update() {
 
   app_version="$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "0.0.0")"
   app_commit="$(git rev-parse HEAD)"
-  export APP_VERSION="${APP_VERSION:-$app_version}"
-  export APP_COMMIT="${APP_COMMIT:-$app_commit}"
+  export APP_VERSION="$app_version"
+  export APP_COMMIT="$app_commit"
 
   docker compose --env-file "$env_file" -f "$compose_file" up -d --build
   echo "Docker 服务已更新到 $app_commit"

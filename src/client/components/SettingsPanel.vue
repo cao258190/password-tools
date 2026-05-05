@@ -25,6 +25,7 @@ const versionLoading = ref(false);
 const versionError = ref("");
 const updateConfirmOpen = ref(false);
 let updateTimer = 0;
+let updateWasRunning = false;
 
 const updateStatusText = computed(() => {
   if (!versionInfo.value) return "尚未检测";
@@ -73,10 +74,17 @@ async function refreshUpdateStatus() {
       };
     }
     if (status.updateRunning) {
+      updateWasRunning = true;
       scheduleUpdateRefresh();
-    } else if (updateTimer) {
-      window.clearTimeout(updateTimer);
-      updateTimer = 0;
+    } else {
+      if (updateTimer) {
+        window.clearTimeout(updateTimer);
+        updateTimer = 0;
+      }
+      if (updateWasRunning) {
+        updateWasRunning = false;
+        void loadVersion(true);
+      }
     }
   } catch {
     if (updateTimer) {
