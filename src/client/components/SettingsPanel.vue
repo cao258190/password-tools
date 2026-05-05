@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { CheckCircle2, Database, DownloadCloud, ExternalLink, Moon, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-vue-next";
+import { CheckCircle2, DownloadCloud, ExternalLink, Moon, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-vue-next";
 import ModalFrame from "./ModalFrame.vue";
 import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
@@ -324,27 +324,6 @@ onBeforeUnmount(() => {
               立即更新
             </button>
           </div>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-title">
-          <Database :size="18" />
-          <h3>数据范围</h3>
-        </div>
-        <div class="settings-facts">
-          <span>
-            <strong>用户隔离</strong>
-            仅返回当前登录用户的网站和账号
-          </span>
-          <span>
-            <strong>固定分类</strong>
-            所有用户共用同一套分类字典
-          </span>
-          <span>
-            <strong>加密字段</strong>
-            账号密码在数据库中以密文保存
-          </span>
         </div>
       </section>
 

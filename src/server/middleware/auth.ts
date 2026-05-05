@@ -7,14 +7,15 @@ import type { AuthUser } from "../types.js";
 
 type TokenPayload = {
   userId: string;
+  tokenVersion?: number;
 };
 
-export function signAuthToken(userId: string) {
-  return jwt.sign({ userId }, env.jwtSecret, { expiresIn: "7d" });
+export function signAuthToken(userId: string, tokenVersion: number) {
+  return jwt.sign({ userId, tokenVersion }, env.jwtSecret, { expiresIn: "7d" });
 }
 
-export function setAuthCookie(res: Response, userId: string) {
-  res.cookie(env.cookieName, signAuthToken(userId), {
+export function setAuthCookie(res: Response, userId: string, tokenVersion: number) {
+  res.cookie(env.cookieName, signAuthToken(userId, tokenVersion), {
     httpOnly: true,
     sameSite: "lax",
     secure: env.cookieSecure,
@@ -42,10 +43,11 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     const payload = jwt.verify(token, env.jwtSecret) as TokenPayload;
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true }
+      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true, tokenVersion: true }
     });
 
-    if (!user) {
+    const tokenVersion = typeof payload.tokenVersion === "number" ? payload.tokenVersion : 0;
+    if (!user || tokenVersion !== user.tokenVersion) {
       next(new HttpError(401, "登录状态已失效"));
       return;
     }

@@ -13,6 +13,10 @@ api_image="${API_IMAGE:-ghcr.io/cao258190/password-tools-api}"
 app_version="${APP_VERSION:-latest}"
 updater_image="${UPDATE_RUNNER_IMAGE:-$api_image:$app_version}"
 
+if [ -n "${UPDATE_JOB_FILE:-}" ]; then
+  exec sh scripts/request-docker-update.sh
+fi
+
 if [ -z "$host_project_dir" ]; then
   echo "未配置 UPDATE_HOST_PROJECT_DIR，Docker Web 更新无法定位宿主机项目目录。" >&2
   exit 1

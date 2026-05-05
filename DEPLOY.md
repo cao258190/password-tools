@@ -59,19 +59,20 @@ Web 在线更新默认开启，首次生成的 `.env.docker` 会写入：
 
 ```env
 WEB_UPDATE_ENABLED=true
-UPDATE_COMMAND="sh scripts/docker-web-update.sh"
+UPDATE_COMMAND="sh scripts/request-docker-update.sh"
 UPDATE_PROJECT_DIR=/workspace/password-tools
 UPDATE_HOST_PROJECT_DIR=/www/wwwroot/password-tools
 UPDATE_ENV_FILE=.env.docker
 UPDATE_COMPOSE_FILE=docker-compose.yml
 UPDATE_DETACHED=true
-UPDATE_STATUS_FILE=/workspace/password-tools/.update-status.json
+UPDATE_STATUS_FILE=/app/update-state/update-status.json
+UPDATE_JOB_FILE=/app/update-state/update-job.json
 API_IMAGE=ghcr.io/cao258190/password-tools-api
 WEB_IMAGE=ghcr.io/cao258190/password-tools-web
 DOCKER_PULL_POLICY=prefer
 ```
 
-`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Web 更新会先启动固定名称的后台更新器容器 `password-tools-updater`。如果页面选择了目标版本，更新器会 checkout 到对应 tag；未指定时会更新 `UPDATE_CHECK_REF` 分支。随后通过挂载的 `/var/run/docker.sock` 更新前端与后端容器。更新状态会写入 `.update-status.json`，因此 API 容器被重建后页面仍能看到成功或失败结果。
+`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Web 更新由 API 写入更新任务，独立的 `password-tools-updater` 服务负责读取任务并执行 Docker 操作。API 容器不挂载 Docker socket；只有 updater 服务挂载项目目录和 `/var/run/docker.sock`。如果页面选择了目标版本，updater 会 checkout 到对应 tag；未指定时会更新 `UPDATE_CHECK_REF` 分支。更新状态会写入共享状态卷，因此 API 容器被重建后页面仍能看到成功或失败结果。
 
 默认部署会优先拉取 GitHub Container Registry 上的预构建镜像：
 
@@ -84,12 +85,12 @@ DOCKER_PULL_POLICY=prefer
 DOCKER_PULL_POLICY=never
 ```
 
-为了支持 Docker Web 更新，`api` 容器会挂载：
+为了支持 Docker Web 更新，`updater` 容器会挂载：
 
 - 当前项目目录：`.:/workspace/password-tools`
 - Docker socket：`/var/run/docker.sock:/var/run/docker.sock`
 
-这意味着管理员点击“立即更新”后，后端容器有权限控制宿主机 Docker。若你不希望 Web 页面具备这项能力，请在 `.env.docker` 中设置：
+这意味着管理员点击“立即更新”后，updater 容器有权限控制宿主机 Docker。若你不希望 Web 页面具备这项能力，请在 `.env.docker` 中设置：
 
 ```env
 WEB_UPDATE_ENABLED=false

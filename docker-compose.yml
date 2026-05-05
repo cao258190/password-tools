@@ -1,11 +1,11 @@
 services:
   api:
-    image: ${API_IMAGE:-ghcr.io/cao258190/password-tools-api}:${APP_VERSION:-1.0.10}
+    image: ${API_IMAGE:-ghcr.io/cao258190/password-tools-api}:${APP_VERSION:-1.0.11}
     build:
       context: .
       dockerfile: Dockerfile.api
       args:
-        APP_VERSION: ${APP_VERSION:-1.0.10}
+        APP_VERSION: ${APP_VERSION:-1.0.11}
         APP_COMMIT: ${APP_COMMIT:-}
     container_name: password-tools-api
     restart: unless-stopped
@@ -25,16 +25,12 @@ services:
       UPDATE_CHECK_REF: ${UPDATE_CHECK_REF:-master}
       WEB_UPDATE_ENABLED: ${WEB_UPDATE_ENABLED:-true}
       UPDATE_DETACHED: ${UPDATE_DETACHED:-true}
-      UPDATE_COMMAND: ${UPDATE_COMMAND:-sh scripts/docker-web-update.sh}
-      UPDATE_PROJECT_DIR: ${UPDATE_PROJECT_DIR:-/workspace/password-tools}
-      UPDATE_HOST_PROJECT_DIR: ${UPDATE_HOST_PROJECT_DIR:-.}
-      UPDATE_ENV_FILE: ${UPDATE_ENV_FILE:-.env.docker}
-      UPDATE_COMPOSE_FILE: ${UPDATE_COMPOSE_FILE:-docker-compose.yml}
-      UPDATE_STATUS_FILE: ${UPDATE_STATUS_FILE:-/workspace/password-tools/.update-status.json}
+      UPDATE_COMMAND: "${UPDATE_COMMAND:-sh scripts/request-docker-update.sh}"
+      UPDATE_STATUS_FILE: ${UPDATE_STATUS_FILE:-/app/update-state/update-status.json}
+      UPDATE_JOB_FILE: ${UPDATE_JOB_FILE:-/app/update-state/update-job.json}
     volumes:
       - password_tools_data:/app/prisma/data
-      - ${UPDATE_HOST_PROJECT_DIR:-.}:/workspace/password-tools
-      - /var/run/docker.sock:/var/run/docker.sock
+      - password_tools_update_state:/app/update-state
     ports:
       - "2697:2697"
     healthcheck:
@@ -45,7 +41,7 @@ services:
       start_period: 20s
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/cao258190/password-tools-web}:${APP_VERSION:-1.0.10}
+    image: ${WEB_IMAGE:-ghcr.io/cao258190/password-tools-web}:${APP_VERSION:-1.0.11}
     build:
       context: .
       dockerfile: Dockerfile.web
@@ -57,5 +53,28 @@ services:
     ports:
       - "3910:3910"
 
+  updater:
+    image: ${API_IMAGE:-ghcr.io/cao258190/password-tools-api}:${APP_VERSION:-1.0.11}
+    container_name: password-tools-updater
+    restart: unless-stopped
+    working_dir: ${UPDATE_PROJECT_DIR:-/workspace/password-tools}
+    environment:
+      UPDATE_CHECK_REF: ${UPDATE_CHECK_REF:-master}
+      UPDATE_PROJECT_DIR: ${UPDATE_PROJECT_DIR:-/workspace/password-tools}
+      UPDATE_ENV_FILE: ${UPDATE_ENV_FILE:-.env.docker}
+      UPDATE_COMPOSE_FILE: ${UPDATE_COMPOSE_FILE:-docker-compose.yml}
+      UPDATE_STATUS_FILE: ${UPDATE_STATUS_FILE:-/app/update-state/update-status.json}
+      UPDATE_JOB_FILE: ${UPDATE_JOB_FILE:-/app/update-state/update-job.json}
+      UPDATE_COMPOSE_SERVICES: "${UPDATE_COMPOSE_SERVICES:-api web}"
+      API_IMAGE: ${API_IMAGE:-ghcr.io/cao258190/password-tools-api}
+      WEB_IMAGE: ${WEB_IMAGE:-ghcr.io/cao258190/password-tools-web}
+      DOCKER_PULL_POLICY: ${DOCKER_PULL_POLICY:-prefer}
+    volumes:
+      - password_tools_update_state:/app/update-state
+      - ${UPDATE_HOST_PROJECT_DIR:-.}:${UPDATE_PROJECT_DIR:-/workspace/password-tools}
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["sh", "scripts/docker-update-daemon.sh"]
+
 volumes:
   password_tools_data:
+  password_tools_update_state:

@@ -33,13 +33,14 @@ GITHUB_OWNER=${GITHUB_OWNER:-cao258190}
 GITHUB_REPO=${GITHUB_REPO:-password-tools}
 UPDATE_CHECK_REF=${UPDATE_CHECK_REF:-master}
 WEB_UPDATE_ENABLED=${WEB_UPDATE_ENABLED:-true}
-UPDATE_COMMAND=${UPDATE_COMMAND:-sh scripts/docker-web-update.sh}
+UPDATE_COMMAND=${UPDATE_COMMAND:-sh scripts/request-docker-update.sh}
 UPDATE_PROJECT_DIR=${UPDATE_PROJECT_DIR:-/workspace/password-tools}
 UPDATE_HOST_PROJECT_DIR=${UPDATE_HOST_PROJECT_DIR:-$host_project_dir}
 UPDATE_ENV_FILE=${UPDATE_ENV_FILE:-.env.docker}
 UPDATE_COMPOSE_FILE=${UPDATE_COMPOSE_FILE:-docker-compose.yml}
 UPDATE_DETACHED=${UPDATE_DETACHED:-true}
-UPDATE_STATUS_FILE=${UPDATE_STATUS_FILE:-/workspace/password-tools/.update-status.json}
+UPDATE_STATUS_FILE=${UPDATE_STATUS_FILE:-/app/update-state/update-status.json}
+UPDATE_JOB_FILE=${UPDATE_JOB_FILE:-/app/update-state/update-job.json}
 API_IMAGE=${API_IMAGE:-ghcr.io/cao258190/password-tools-api}
 WEB_IMAGE=${WEB_IMAGE:-ghcr.io/cao258190/password-tools-web}
 DOCKER_PULL_POLICY=${DOCKER_PULL_POLICY:-prefer}
@@ -57,8 +58,18 @@ if ! grep -q '^UPDATE_DETACHED=' "$env_file"; then
   printf 'UPDATE_DETACHED=true\n' >> "$env_file"
 fi
 
+if grep -q '^UPDATE_COMMAND=sh scripts/docker-web-update.sh$' "$env_file"; then
+  sed -i 's#^UPDATE_COMMAND=.*#UPDATE_COMMAND=sh scripts/request-docker-update.sh#' "$env_file"
+fi
+
 if ! grep -q '^UPDATE_STATUS_FILE=' "$env_file"; then
-  printf 'UPDATE_STATUS_FILE=/workspace/password-tools/.update-status.json\n' >> "$env_file"
+  printf 'UPDATE_STATUS_FILE=/app/update-state/update-status.json\n' >> "$env_file"
+elif grep -q '^UPDATE_STATUS_FILE=/workspace/password-tools/.update-status.json$' "$env_file"; then
+  sed -i 's#^UPDATE_STATUS_FILE=.*#UPDATE_STATUS_FILE=/app/update-state/update-status.json#' "$env_file"
+fi
+
+if ! grep -q '^UPDATE_JOB_FILE=' "$env_file"; then
+  printf 'UPDATE_JOB_FILE=/app/update-state/update-job.json\n' >> "$env_file"
 fi
 
 if ! grep -q '^API_IMAGE=' "$env_file"; then

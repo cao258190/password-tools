@@ -53,10 +53,10 @@ authRouter.post(
         passwordHash: await bcrypt.hash(input.password, 12),
         cryptoSalt: createUserSalt()
       },
-      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true }
+      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true, tokenVersion: true }
     });
 
-    setAuthCookie(res, user.id);
+    setAuthCookie(res, user.id, user.tokenVersion);
     res.status(201).json({ user: publicUser(user) });
   })
 );
@@ -76,14 +76,15 @@ authRouter.post(
       throw new HttpError(401, "邮箱或密码不正确");
     }
 
-    setAuthCookie(res, user.id);
+    setAuthCookie(res, user.id, user.tokenVersion);
     res.json({
       user: publicUser({
         id: user.id,
         email: user.email,
         name: user.name,
         cryptoSalt: user.cryptoSalt,
-        isAdmin: user.isAdmin
+        isAdmin: user.isAdmin,
+        tokenVersion: user.tokenVersion
       })
     });
   })
@@ -123,7 +124,7 @@ authRouter.patch(
         email: input.email,
         name: input.name || null
       },
-      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true }
+      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true, tokenVersion: true }
     });
 
     res.json({ user: publicUser(user) });
@@ -148,11 +149,16 @@ authRouter.patch(
       throw new HttpError(400, "新密码不能与当前密码相同");
     }
 
-    await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash: await bcrypt.hash(input.newPassword, 12) }
+      data: {
+        passwordHash: await bcrypt.hash(input.newPassword, 12),
+        tokenVersion: { increment: 1 }
+      },
+      select: { id: true, tokenVersion: true }
     });
 
+    setAuthCookie(res, updated.id, updated.tokenVersion);
     res.status(204).end();
   })
 );

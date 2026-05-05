@@ -4,6 +4,7 @@ export type AuthUser = {
   name: string | null;
   cryptoSalt: string;
   isAdmin: boolean;
+  tokenVersion: number;
 };
 
 declare global {

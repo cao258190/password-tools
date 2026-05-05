@@ -6,6 +6,7 @@ target_version="${TARGET_VERSION:-}"
 env_file="${UPDATE_ENV_FILE:-.env.docker}"
 compose_file="${UPDATE_COMPOSE_FILE:-docker-compose.yml}"
 status_file="${UPDATE_STATUS_FILE:-.update-status.json}"
+compose_services="${UPDATE_COMPOSE_SERVICES:-api web}"
 
 normalized_target_version() {
   if [ -z "$target_version" ]; then
@@ -43,15 +44,15 @@ EOF_STATUS
 compose_up() {
   pull_policy="${DOCKER_PULL_POLICY:-prefer}"
   if [ "$pull_policy" = "never" ]; then
-    docker compose --env-file "$env_file" -f "$compose_file" up -d --build
+    docker compose --env-file "$env_file" -f "$compose_file" up -d --build $compose_services
     return
   fi
 
-  if docker compose --env-file "$env_file" -f "$compose_file" pull; then
-    docker compose --env-file "$env_file" -f "$compose_file" up -d --no-build
+  if docker compose --env-file "$env_file" -f "$compose_file" pull $compose_services; then
+    docker compose --env-file "$env_file" -f "$compose_file" up -d --no-build $compose_services
   else
     echo "预构建镜像不可用，回退到服务器本地构建。"
-    docker compose --env-file "$env_file" -f "$compose_file" up -d --build
+    docker compose --env-file "$env_file" -f "$compose_file" up -d --build $compose_services
   fi
 }
 

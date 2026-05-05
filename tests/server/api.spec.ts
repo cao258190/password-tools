@@ -289,6 +289,21 @@ describe("password vault API", () => {
       .expect(200);
   });
 
+  it("invalidates old sessions after password changes", async () => {
+    const agent = await registerAgent("session@example.com");
+    const secondSession = await loginAgent("session@example.com", "testpass123");
+
+    await secondSession.get("/api/auth/me").expect(200);
+    await agent
+      .patch("/api/auth/password")
+      .set(csrfHeader, await csrfToken(agent))
+      .send({ currentPassword: "testpass123", newPassword: "newpass123" })
+      .expect(204);
+
+    await agent.get("/api/auth/me").expect(200);
+    await secondSession.get("/api/auth/me").expect(401);
+  });
+
   it("creates sites with encrypted account passwords and decrypts for the owner", async () => {
     const agent = await registerAgent("owner@example.com");
     const token = await csrfToken(agent);
@@ -330,6 +345,55 @@ describe("password vault API", () => {
     expect(detail.body.site.accounts[0].password).toBe("PlainPass#2026");
     expect(detail.body.site.iconColor).toBe("#111827");
     expect(detail.body.site.accountCount).toBe(1);
+  });
+
+  it("serializes account updates and refreshes the parent site modified time", async () => {
+    const agent = await registerAgent("account-update@example.com");
+    const token = await csrfToken(agent);
+    const created = await agent
+      .post("/api/sites")
+      .set(csrfHeader, token)
+      .send({
+        name: "Account Site",
+        primaryUrl: "https://account.example.com",
+        backupUrls: [],
+        tags: [],
+        accounts: [
+          {
+            label: "主账号",
+            username: "before@example.com",
+            password: "BeforePass#2026"
+          }
+        ]
+      })
+      .expect(201);
+
+    const siteId = created.body.site.id;
+    const accountId = created.body.site.accounts[0].id;
+    const originalUpdatedAt = new Date("2026-01-01T00:00:00.000Z");
+    await prisma.$executeRaw`UPDATE "Site" SET "updatedAt" = ${originalUpdatedAt} WHERE "id" = ${siteId}`;
+
+    const updated = await agent
+      .patch(`/api/accounts/${accountId}`)
+      .set(csrfHeader, token)
+      .send({ username: "after@example.com", password: "AfterPass#2026" })
+      .expect(200);
+
+    expect(updated.body.account.username).toBe("after@example.com");
+    expect(updated.body.account.password).toBe("AfterPass#2026");
+    expect(updated.body.account.passwordSecret).toBeUndefined();
+    expect(updated.body.account.userId).toBeUndefined();
+
+    const rawSite = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    expect(rawSite.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
+
+    const afterPatchUpdatedAt = rawSite.updatedAt;
+    await prisma.$executeRaw`UPDATE "Site" SET "updatedAt" = ${originalUpdatedAt} WHERE "id" = ${siteId}`;
+    await agent.delete(`/api/accounts/${accountId}`).set(csrfHeader, token).expect(204);
+
+    const afterDelete = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    expect(afterDelete.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
+    expect(afterDelete.updatedAt.getTime()).toBeGreaterThanOrEqual(afterPatchUpdatedAt.getTime());
   });
 
   it("rejects unsafe color values for icon styles", async () => {

@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS "User" (
   "passwordHash" TEXT NOT NULL,
   "cryptoSalt" TEXT NOT NULL,
   "isAdmin" BOOLEAN NOT NULL DEFAULT false,
+  "tokenVersion" INTEGER NOT NULL DEFAULT 0,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL
 );
@@ -121,6 +122,9 @@ const userColumns = db
   .map((column) => column.name);
 if (!userColumns.includes("isAdmin")) {
   db.exec(`ALTER TABLE "User" ADD COLUMN "isAdmin" BOOLEAN NOT NULL DEFAULT false;`);
+}
+if (!userColumns.includes("tokenVersion")) {
+  db.exec(`ALTER TABLE "User" ADD COLUMN "tokenVersion" INTEGER NOT NULL DEFAULT 0;`);
 }
 
 const siteColumns = db
