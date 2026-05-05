@@ -9,7 +9,9 @@ import type {
   SiteSummary,
   Stats,
   TagSummary,
-  User
+  UpdateStatus,
+  User,
+  VersionInfo
 } from "./types";
 
 export class ApiError extends Error {
@@ -87,6 +89,20 @@ export const api = {
   },
   updateAdminSettings(input: AdminSettings) {
     return request<{ settings: AdminSettings }>("/api/admin/settings", withBody("PATCH", input));
+  },
+  adminVersion(force = false) {
+    const suffix = force ? "?force=true" : "";
+    return request<{ version: VersionInfo }>(`/api/admin/version${suffix}`);
+  },
+  updateStatus() {
+    return request<{
+      updateEnabled: boolean;
+      updateRunning: boolean;
+      lastUpdate: UpdateStatus | null;
+    }>("/api/admin/update");
+  },
+  runUpdate() {
+    return request<{ update: UpdateStatus }>("/api/admin/update", withBody("POST"));
   },
   categories() {
     return request<{ categories: Category[] }>("/api/categories");

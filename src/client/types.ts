@@ -13,6 +13,28 @@ export type PublicSettings = {
 
 export type AdminSettings = PublicSettings;
 
+export type UpdateStatus = {
+  status: "idle" | "running" | "success" | "failed";
+  startedAt: string;
+  finishedAt: string | null;
+  message: string;
+  output: string;
+};
+
+export type VersionInfo = {
+  currentVersion: string;
+  currentCommit: string | null;
+  latestVersion: string | null;
+  latestSha: string | null;
+  latestUrl: string | null;
+  updateAvailable: boolean;
+  updateEnabled: boolean;
+  source: "release" | "branch";
+  checkedAt: string;
+  updateRunning: boolean;
+  lastUpdate: UpdateStatus | null;
+};
+
 export type Category = {
   id: string;
   name: string;

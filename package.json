@@ -16,6 +16,7 @@
     "db:push:prisma": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "node scripts/init-db.mjs --reset && tsx prisma/seed.ts",
+    "web:update": "sh scripts/web-update.sh",
     "test": "cross-env NODE_ENV=test DATABASE_URL=file:./test.db JWT_SECRET=test-jwt-secret SERVER_CRYPTO_SECRET=test-crypto-secret node scripts/init-db.mjs --reset && cross-env NODE_ENV=test DATABASE_URL=file:./test.db JWT_SECRET=test-jwt-secret SERVER_CRYPTO_SECRET=test-crypto-secret vitest run",
     "visual:check": "node scripts/visual-check.mjs"
   },

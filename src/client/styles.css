@@ -1333,6 +1333,100 @@ a {
   font-size: 12px;
 }
 
+.version-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.version-status-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.version-status-row > span:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.version-status-row strong {
+  color: #eef6ff;
+  font-size: 15px;
+}
+
+.version-status-row small {
+  color: #8fa1b8;
+  font-size: 11px;
+}
+
+.version-badge {
+  flex: none;
+  padding: 4px 8px;
+  color: #bfdbfe;
+  border: 1px solid #254873;
+  border-radius: 7px;
+  background: rgba(37, 99, 235, 0.14);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.version-card.pending .version-badge {
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.version-card.running .version-badge {
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.version-facts {
+  gap: 7px;
+}
+
+.version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.update-log {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #25364f;
+  border-radius: 8px;
+  background: #0d1420;
+}
+
+.update-log strong {
+  color: #e8f1ff;
+  font-size: 12px;
+}
+
+.update-log small {
+  color: #8394ad;
+  font-size: 11px;
+}
+
+.update-log pre {
+  max-height: 150px;
+  margin: 4px 0 0;
+  overflow: auto;
+  color: #b9c7d8;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .settings-toggle-row {
   display: flex;
   align-items: center;
@@ -1836,6 +1930,43 @@ html[data-theme="soft"] .settings-facts strong {
   color: #111827;
 }
 
+html[data-theme="soft"] .version-status-row strong,
+html[data-theme="soft"] .update-log strong {
+  color: #111827;
+}
+
+html[data-theme="soft"] .version-status-row small,
+html[data-theme="soft"] .update-log small {
+  color: #718198;
+}
+
+html[data-theme="soft"] .version-badge {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+html[data-theme="soft"] .version-card.pending .version-badge {
+  color: #92400e;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+html[data-theme="soft"] .version-card.running .version-badge {
+  color: #166534;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+html[data-theme="soft"] .update-log {
+  border-color: #d7e1ee;
+  background: #f7faff;
+}
+
+html[data-theme="soft"] .update-log pre {
+  color: #41516a;
+}
+
 html[data-theme="soft"] .settings-toggle-row strong {
   color: #111827;
 }
@@ -2262,6 +2393,16 @@ html[data-theme="soft"] .profile-pill {
   }
 
   .input-with-button .secondary {
+    width: 100%;
+  }
+
+  .version-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .version-actions .secondary,
+  .version-actions .primary {
     width: 100%;
   }
 

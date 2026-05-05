@@ -45,6 +45,25 @@ REGISTRATION_ENABLED=false
 
 `REGISTRATION_ENABLED=false` 表示首次部署后关闭普通注册入口，管理员可在应用设置中重新开启。
 
+GitHub 版本检测配置：
+
+```env
+GITHUB_OWNER=cao258190
+GITHUB_REPO=password-tools
+UPDATE_CHECK_REF=master
+```
+
+管理员可在“保险库设置”中检测 GitHub 最新 Release；如果仓库没有 Release，会回退检测 `UPDATE_CHECK_REF` 分支最新提交。
+
+Web 在线更新默认关闭，必须同时配置以下两项才会启用：
+
+```env
+WEB_UPDATE_ENABLED=true
+UPDATE_COMMAND="npm run web:update"
+```
+
+`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。示例 `npm run web:update` 适合直接在源码目录运行的部署方式，会执行 `git pull --ff-only`、安装依赖、生成 Prisma Client、构建并初始化数据库。若使用 Docker Compose 部署，需要把该命令替换成你自己的宿主机更新脚本，例如拉取代码后执行 `docker compose --env-file .env.docker up -d --build`。不要在未隔离、未确认脚本内容的公网环境开启 Web 在线更新。
+
 ## 常用命令
 
 ```bash

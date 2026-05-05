@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
-import { Database, Moon, ShieldCheck, UserPlus, X } from "lucide-vue-next";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { Database, DownloadCloud, ExternalLink, Moon, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-vue-next";
 import ModalFrame from "./ModalFrame.vue";
 import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import { useVaultStore } from "../stores/vault";
+import type { VersionInfo } from "../types";
 
-defineProps<{
+const props = defineProps<{
   open: boolean;
 }>();
 
@@ -19,6 +20,20 @@ const auth = useAuthStore();
 const registrationEnabled = ref(false);
 const savingRegistration = ref(false);
 const settingsError = ref("");
+const versionInfo = ref<VersionInfo | null>(null);
+const versionLoading = ref(false);
+const versionError = ref("");
+const updateConfirmOpen = ref(false);
+let updateTimer = 0;
+
+const updateStatusText = computed(() => {
+  if (!versionInfo.value) return "尚未检测";
+  if (versionInfo.value.updateRunning) return "更新中";
+  if (versionInfo.value.updateAvailable) return "发现新版本";
+  return "已是最新";
+});
+
+const lastUpdateOutput = computed(() => versionInfo.value?.lastUpdate?.output.trim() || "");
 
 async function loadAdminSettings() {
   if (!auth.user?.isAdmin) return;
@@ -28,6 +43,72 @@ async function loadAdminSettings() {
     auth.publicSettings = settings;
   } catch (error) {
     settingsError.value = error instanceof Error ? error.message : "加载管理员设置失败";
+  }
+}
+
+async function loadVersion(force = false) {
+  if (!auth.user?.isAdmin || versionLoading.value) return;
+  versionLoading.value = true;
+  versionError.value = "";
+  try {
+    const { version } = await api.adminVersion(force);
+    versionInfo.value = version;
+  } catch (error) {
+    versionError.value = error instanceof Error ? error.message : "检测版本失败";
+  } finally {
+    versionLoading.value = false;
+  }
+}
+
+async function refreshUpdateStatus() {
+  if (!auth.user?.isAdmin) return;
+  try {
+    const status = await api.updateStatus();
+    if (versionInfo.value) {
+      versionInfo.value = {
+        ...versionInfo.value,
+        updateEnabled: status.updateEnabled,
+        updateRunning: status.updateRunning,
+        lastUpdate: status.lastUpdate
+      };
+    }
+    if (status.updateRunning) {
+      scheduleUpdateRefresh();
+    } else if (updateTimer) {
+      window.clearTimeout(updateTimer);
+      updateTimer = 0;
+    }
+  } catch {
+    if (updateTimer) {
+      window.clearTimeout(updateTimer);
+      updateTimer = 0;
+    }
+  }
+}
+
+function scheduleUpdateRefresh() {
+  window.clearTimeout(updateTimer);
+  updateTimer = window.setTimeout(() => {
+    void refreshUpdateStatus();
+  }, 2500);
+}
+
+async function runVersionUpdate() {
+  updateConfirmOpen.value = false;
+  if (!auth.user?.isAdmin) return;
+  versionError.value = "";
+  try {
+    const { update } = await api.runUpdate();
+    if (versionInfo.value) {
+      versionInfo.value = {
+        ...versionInfo.value,
+        updateRunning: update.status === "running",
+        lastUpdate: update
+      };
+    }
+    scheduleUpdateRefresh();
+  } catch (error) {
+    versionError.value = error instanceof Error ? error.message : "启动更新失败";
   }
 }
 
@@ -47,6 +128,13 @@ async function toggleRegistration() {
   }
 }
 
+function loadSettingsPanelData() {
+  if (!props.open || !auth.user?.isAdmin) return;
+  void loadAdminSettings();
+  void loadVersion();
+  void refreshUpdateStatus();
+}
+
 watch(
   () => auth.publicSettings.registrationEnabled,
   (enabled) => {
@@ -55,8 +143,10 @@ watch(
   { immediate: true }
 );
 
-onMounted(() => {
-  void loadAdminSettings();
+watch(() => props.open, loadSettingsPanelData, { immediate: true });
+
+onBeforeUnmount(() => {
+  window.clearTimeout(updateTimer);
 });
 </script>
 
@@ -109,6 +199,68 @@ onMounted(() => {
         <p v-if="settingsError" class="form-error">{{ settingsError }}</p>
       </section>
 
+      <section v-if="auth.user?.isAdmin" class="settings-section">
+        <div class="settings-section-title">
+          <DownloadCloud :size="18" />
+          <h3>版本更新</h3>
+        </div>
+        <div class="version-card" :class="{ pending: versionInfo?.updateAvailable, running: versionInfo?.updateRunning }">
+          <div class="version-status-row">
+            <span>
+              <strong>{{ updateStatusText }}</strong>
+              <small v-if="versionInfo">检测时间：{{ new Date(versionInfo.checkedAt).toLocaleString("zh-CN") }}</small>
+              <small v-else>从 GitHub 检测当前项目最新版本</small>
+            </span>
+            <span class="version-badge">{{ versionInfo?.source === "release" ? "Release" : "GitHub" }}</span>
+          </div>
+          <div class="settings-facts version-facts">
+            <span>
+              <strong>当前版本</strong>
+              {{ versionInfo?.currentVersion ?? "未知" }}
+            </span>
+            <span>
+              <strong>最新版本</strong>
+              {{ versionInfo?.latestVersion ?? "未检测到" }}
+            </span>
+            <span v-if="versionInfo?.latestSha">
+              <strong>最新提交</strong>
+              {{ versionInfo.latestSha.slice(0, 12) }}
+            </span>
+          </div>
+          <p v-if="!versionInfo?.updateEnabled">Web 在线更新未启用，请在服务器配置 WEB_UPDATE_ENABLED 和 UPDATE_COMMAND。</p>
+          <p v-else-if="versionInfo.updateAvailable">检测到新版本，可直接在 Web 端触发服务器预配置更新命令。</p>
+          <p v-else>当前部署未检测到可用更新。</p>
+          <p v-if="versionError" class="form-error">{{ versionError }}</p>
+          <div v-if="versionInfo?.lastUpdate" class="update-log">
+            <strong>{{ versionInfo.lastUpdate.message }}</strong>
+            <small>
+              {{ versionInfo.lastUpdate.startedAt ? new Date(versionInfo.lastUpdate.startedAt).toLocaleString("zh-CN") : "" }}
+              <template v-if="versionInfo.lastUpdate.finishedAt"> - {{ new Date(versionInfo.lastUpdate.finishedAt).toLocaleString("zh-CN") }}</template>
+            </small>
+            <pre v-if="lastUpdateOutput">{{ lastUpdateOutput }}</pre>
+          </div>
+          <div class="version-actions">
+            <button class="secondary" type="button" :disabled="versionLoading || versionInfo?.updateRunning" @click="loadVersion(true)">
+              <RefreshCw :class="{ spin: versionLoading }" :size="16" />
+              检测更新
+            </button>
+            <a v-if="versionInfo?.latestUrl" class="secondary" :href="versionInfo.latestUrl" target="_blank" rel="noreferrer">
+              <ExternalLink :size="16" />
+              GitHub
+            </a>
+            <button
+              class="primary"
+              type="button"
+              :disabled="!versionInfo?.updateEnabled || !versionInfo?.updateAvailable || versionInfo?.updateRunning"
+              @click="updateConfirmOpen = true"
+            >
+              <DownloadCloud :size="16" />
+              立即更新
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section class="settings-section">
         <div class="settings-section-title">
           <Database :size="18" />
@@ -145,5 +297,16 @@ onMounted(() => {
         </button>
       </footer>
     </div>
+  </ModalFrame>
+
+  <ModalFrame :open="updateConfirmOpen" title="确认在线更新" @close="updateConfirmOpen = false">
+    <div class="confirm-body">
+      <DownloadCloud :size="28" />
+      <p>确认执行服务器预配置的更新命令？更新过程中服务可能短暂不可用。</p>
+    </div>
+    <footer class="modal-footer">
+      <button class="secondary" type="button" @click="updateConfirmOpen = false">取消</button>
+      <button class="danger" type="button" @click="runVersionUpdate">确认更新</button>
+    </footer>
   </ModalFrame>
 </template>

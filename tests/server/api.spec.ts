@@ -1,5 +1,5 @@
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import { prisma } from "../../src/server/db";
 import { bootstrapSystem, setRegistrationEnabled } from "../../src/server/services/bootstrap";
@@ -56,6 +56,10 @@ describe("password vault API", () => {
     await prisma.$disconnect();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("registers, authenticates, and returns the current user", async () => {
     const agent = await registerAgent("user@example.com");
 
@@ -102,6 +106,30 @@ describe("password vault API", () => {
       .set(csrfHeader, await csrfToken(normalUser))
       .send({ registrationEnabled: false })
       .expect(403);
+  });
+
+  it("lets admins check GitHub version while web updates stay disabled by default", async () => {
+    const admin = await loginAgent();
+    const token = await csrfToken(admin);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        tag_name: "v9.9.9",
+        html_url: "https://github.com/cao258190/password-tools/releases/tag/v9.9.9"
+      })
+    } as Response);
+
+    const version = await admin.get("/api/admin/version?force=true").expect(200);
+    expect(fetchMock).toHaveBeenCalled();
+    expect(version.body.version.latestVersion).toBe("v9.9.9");
+    expect(version.body.version.updateAvailable).toBe(true);
+    expect(version.body.version.updateEnabled).toBe(false);
+
+    await admin.post("/api/admin/update").set(csrfHeader, token).expect(403);
+
+    const normalUser = await registerAgent("not-admin@example.com");
+    await normalUser.get("/api/admin/version?force=true").expect(403);
   });
 
   it("rejects mutating requests without CSRF token", async () => {

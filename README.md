@@ -12,6 +12,7 @@
 - 全局固定分类：所有用户共用同一套分类字典，网站和账号数据按用户隔离
 - 安全处理：用户密码使用 `bcryptjs` 哈希；账号密码使用服务端密钥派生后 `AES-256-GCM` 加密存储
 - 请求防护：写操作使用 CSRF 双提交校验，登录和注册接口有基础限流，服务端返回安全响应头
+- 版本更新：管理员可在设置中检测 GitHub 最新版本，并在服务器开启后通过 Web 触发预配置更新命令
 - Docker 一键部署：前端端口 `3910`，后端端口 `2697`
 
 ## 技术栈
@@ -131,6 +132,9 @@ chmod +x deploy.sh
 - `GET /api/public/settings`：公开系统设置
 - `GET /api/admin/settings`：管理员设置
 - `PATCH /api/admin/settings`：修改管理员设置
+- `GET /api/admin/version`：管理员检测 GitHub 版本
+- `GET /api/admin/update`：管理员查看 Web 更新任务状态
+- `POST /api/admin/update`：管理员触发服务器预配置更新命令
 - `GET /api/categories`：全局固定分类和当前用户计数
 - `GET /api/sites`：网站列表
 - `POST /api/sites`：新增网站
@@ -155,5 +159,6 @@ chmod +x deploy.sh
 - 使用 HTTPS，并在 HTTPS 环境设置 `COOKIE_SECURE=true`
 - 妥善备份 SQLite volume
 - 限制服务器访问权限并定期更新镜像
+- Web 在线更新默认关闭；只有在服务器上配置可信 `UPDATE_COMMAND` 后再设置 `WEB_UPDATE_ENABLED=true`
 
 生产环境启动时会检查 `JWT_SECRET`、`SERVER_CRYPTO_SECRET` 和 `ADMIN_PASSWORD`，如果仍是默认值或长度过短会拒绝启动。
