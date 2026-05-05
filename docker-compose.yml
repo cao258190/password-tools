@@ -20,9 +20,14 @@ services:
       GITHUB_REPO: ${GITHUB_REPO:-password-tools}
       UPDATE_CHECK_REF: ${UPDATE_CHECK_REF:-master}
       WEB_UPDATE_ENABLED: ${WEB_UPDATE_ENABLED:-true}
-      UPDATE_COMMAND: ${UPDATE_COMMAND:-npm run web:update}
+      UPDATE_COMMAND: ${UPDATE_COMMAND:-sh scripts/docker-web-update.sh}
+      UPDATE_PROJECT_DIR: ${UPDATE_PROJECT_DIR:-/workspace/password-tools}
+      UPDATE_ENV_FILE: ${UPDATE_ENV_FILE:-.env.docker}
+      UPDATE_COMPOSE_FILE: ${UPDATE_COMPOSE_FILE:-docker-compose.yml}
     volumes:
       - password_tools_data:/app/prisma/data
+      - .:/workspace/password-tools
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "2697:2697"
     healthcheck:

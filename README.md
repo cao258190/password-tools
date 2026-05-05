@@ -159,6 +159,6 @@ chmod +x deploy.sh
 - 使用 HTTPS，并在 HTTPS 环境设置 `COOKIE_SECURE=true`
 - 妥善备份 SQLite volume
 - 限制服务器访问权限并定期更新镜像
-- Web 在线更新默认开启；Docker 部署时请将 `UPDATE_COMMAND` 调整为可信的服务器更新脚本
+- Web 在线更新默认开启；Docker 部署会通过挂载的 Docker socket 重建 compose 服务，不需要时请设置 `WEB_UPDATE_ENABLED=false`
 
 生产环境启动时会检查 `JWT_SECRET`、`SERVER_CRYPTO_SECRET` 和 `ADMIN_PASSWORD`，如果仍是默认值或长度过短会拒绝启动。

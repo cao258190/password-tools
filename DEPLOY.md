@@ -59,10 +59,26 @@ Web 在线更新默认开启，首次生成的 `.env.docker` 会写入：
 
 ```env
 WEB_UPDATE_ENABLED=true
-UPDATE_COMMAND="npm run web:update"
+UPDATE_COMMAND="sh scripts/docker-web-update.sh"
+UPDATE_PROJECT_DIR=/workspace/password-tools
+UPDATE_ENV_FILE=.env.docker
+UPDATE_COMPOSE_FILE=docker-compose.yml
 ```
 
-`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。示例 `npm run web:update` 适合直接在源码目录运行的部署方式，会执行 `git pull --ff-only`、安装依赖、生成 Prisma Client、构建并初始化数据库。若使用 Docker Compose 部署，建议把该命令替换成你自己的宿主机更新脚本，例如拉取代码后执行 `docker compose --env-file .env.docker up -d --build`。
+`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Compose 默认命令会在挂载的项目目录中执行 `git pull --ff-only`，然后通过挂载的 `/var/run/docker.sock` 执行 `docker compose --env-file .env.docker up -d --build`，重建前端与后端容器。
+
+为了支持 Docker Web 更新，`api` 容器会挂载：
+
+- 当前项目目录：`.:/workspace/password-tools`
+- Docker socket：`/var/run/docker.sock:/var/run/docker.sock`
+
+这意味着管理员点击“立即更新”后，后端容器有权限控制宿主机 Docker。若你不希望 Web 页面具备这项能力，请在 `.env.docker` 中设置：
+
+```env
+WEB_UPDATE_ENABLED=false
+```
+
+如果使用非标准项目路径或 compose 文件名，请调整 `UPDATE_PROJECT_DIR`、`UPDATE_ENV_FILE` 和 `UPDATE_COMPOSE_FILE`。
 
 ## 常用命令
 
