@@ -355,6 +355,16 @@ a {
   background: #b91c1c;
 }
 
+.danger.subtle {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(185, 28, 28, 0.18);
+}
+
+.danger.subtle:hover {
+  background: rgba(185, 28, 28, 0.28);
+}
+
 .ghost,
 .link-button {
   color: #b9c7d8;
@@ -922,6 +932,16 @@ a {
   color: #fecaca;
 }
 
+.form-success {
+  color: #86efac;
+}
+
+.modal-inline-error {
+  margin: 0 18px 10px;
+  color: #fecaca;
+  font-size: 12px;
+}
+
 .account-pane {
   overflow: hidden;
   border-right: 0;
@@ -1447,6 +1467,26 @@ a {
   gap: 8px;
 }
 
+.backup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hidden-file-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .update-log {
   display: flex;
   flex-direction: column;
@@ -1625,6 +1665,11 @@ a {
 }
 
 .form-error {
+  margin: 0;
+  font-size: 12px;
+}
+
+.form-success {
   margin: 0;
   font-size: 12px;
 }
@@ -1826,6 +1871,16 @@ html[data-theme="soft"] .secondary {
 
 html[data-theme="soft"] .secondary:hover {
   background: #f1f6fd;
+}
+
+html[data-theme="soft"] .danger.subtle {
+  color: #991b1b;
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+html[data-theme="soft"] .danger.subtle:hover {
+  background: #fee2e2;
 }
 
 html[data-theme="soft"] .ghost,
@@ -2044,6 +2099,10 @@ html[data-theme="soft"] .settings-toggle-row strong {
 html[data-theme="soft"] .settings-toggle-row small,
 html[data-theme="soft"] .auth-note {
   color: #718198;
+}
+
+html[data-theme="soft"] .form-success {
+  color: #15803d;
 }
 
 html[data-theme="soft"] .switch-button {
@@ -2471,6 +2530,11 @@ html[data-theme="soft"] .profile-pill {
     grid-template-columns: 1fr;
   }
 
+  .backup-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .version-facts {
     grid-template-columns: 1fr;
   }
@@ -2480,7 +2544,9 @@ html[data-theme="soft"] .profile-pill {
   }
 
   .version-actions .secondary,
-  .version-actions .primary {
+  .version-actions .primary,
+  .backup-actions .secondary,
+  .backup-actions .danger {
     width: 100%;
   }
 

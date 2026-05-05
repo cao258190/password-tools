@@ -168,6 +168,82 @@ describe("password vault API", () => {
     await normalUser.post("/api/admin/update").set(csrfHeader, await csrfToken(normalUser)).expect(403);
   });
 
+  it("lets admins export and restore encrypted system backups", async () => {
+    const admin = await loginAgent();
+    const token = await csrfToken(admin);
+    const normalUser = await registerAgent("backup-user@example.com");
+
+    await normalUser.get("/api/admin/backup/export").expect(403);
+
+    const created = await admin
+      .post("/api/sites")
+      .set(csrfHeader, token)
+      .send({
+        name: "Backup Site",
+        primaryUrl: "https://backup.example.com",
+        backupUrls: [],
+        tags: ["备份"],
+        accounts: [
+          {
+            label: "备份账号",
+            username: "backup@example.com",
+            password: "ExportPass#2026"
+          }
+        ]
+      })
+      .expect(201);
+
+    const exported = await admin.get("/api/admin/backup/export").expect(200);
+    const backup = exported.body.backup;
+    expect(backup.kind).toBe("password-tools-backup");
+    expect(backup.encryption.requiresSameServerCryptoSecret).toBe(true);
+    expect(JSON.stringify(backup)).not.toContain("ExportPass#2026");
+    expect(backup.tables.accounts[0].passwordSecret).toBeTruthy();
+
+    await prisma.account.deleteMany();
+    await prisma.site.deleteMany();
+    expect(await prisma.site.count()).toBe(0);
+
+    const imported = await admin
+      .post("/api/admin/backup/import")
+      .set(csrfHeader, token)
+      .send({ confirm: "RESTORE", backup })
+      .expect(200);
+
+    expect(imported.body.result.sites).toBeGreaterThan(0);
+    const detail = await admin.get(`/api/sites/${created.body.site.id}`).expect(200);
+    expect(detail.body.site.name).toBe("Backup Site");
+    expect(detail.body.site.accounts[0].password).toBe("ExportPass#2026");
+  });
+
+  it("rejects invalid or unsafe backup imports", async () => {
+    const admin = await loginAgent();
+    const token = await csrfToken(admin);
+    const exported = await admin.get("/api/admin/backup/export").expect(200);
+    const backup = {
+      ...exported.body.backup,
+      tables: {
+        ...exported.body.backup.tables,
+        users: exported.body.backup.tables.users.map((user: { isAdmin: boolean }) => ({
+          ...user,
+          isAdmin: false
+        }))
+      }
+    };
+
+    await admin
+      .post("/api/admin/backup/import")
+      .set(csrfHeader, token)
+      .send({ confirm: "RESTORE", backup })
+      .expect(400);
+
+    await admin
+      .post("/api/admin/backup/import")
+      .set(csrfHeader, token)
+      .send({ confirm: "NOPE", backup: exported.body.backup })
+      .expect(400);
+  });
+
   it("falls back to the repository package version instead of commit sha", async () => {
     const admin = await loginAgent();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

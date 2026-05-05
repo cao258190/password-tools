@@ -17,6 +17,8 @@ import { csrfProtection, securityHeaders } from "./middleware/security.js";
 
 export function createApp() {
   const app = express();
+  const defaultJsonParser = express.json({ limit: "1mb" });
+  const backupJsonParser = express.json({ limit: "20mb" });
 
   app.use(
     cors({
@@ -25,7 +27,10 @@ export function createApp() {
     })
   );
   app.use(securityHeaders);
-  app.use(express.json({ limit: "1mb" }));
+  app.use((req, res, next) => {
+    const parser = req.path === "/api/admin/backup/import" ? backupJsonParser : defaultJsonParser;
+    parser(req, res, next);
+  });
   app.use(cookieParser());
   app.use(csrfProtection);
 

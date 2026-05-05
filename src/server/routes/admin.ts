@@ -3,6 +3,7 @@ import { z } from "zod";
 import { asyncHandler } from "../http.js";
 import { requireAdmin } from "../middleware/admin.js";
 import { requireAuth } from "../middleware/auth.js";
+import { exportSystemBackup, importSystemBackup } from "../services/backup.js";
 import { getRegistrationEnabled, setRegistrationEnabled } from "../services/bootstrap.js";
 import { checkVersion, getUpdateStatus, runUpdate } from "../services/version.js";
 
@@ -18,6 +19,11 @@ const updateSchema = z.object({
     .trim()
     .regex(/^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/, "版本号格式无效")
     .optional()
+});
+
+const importSchema = z.object({
+  confirm: z.literal("RESTORE"),
+  backup: z.unknown()
 });
 
 adminRouter.get(
@@ -77,5 +83,28 @@ adminRouter.post(
     const input = updateSchema.parse(_req.body ?? {});
     const update = await runUpdate(input.targetVersion);
     res.status(202).json({ update });
+  })
+);
+
+adminRouter.get(
+  "/backup/export",
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    const backup = await exportSystemBackup();
+    const exportedAt = backup.exportedAt.replace(/[:.]/g, "-");
+    res.setHeader("Content-Disposition", `attachment; filename="password-tools-backup-${exportedAt}.json"`);
+    res.json({ backup });
+  })
+);
+
+adminRouter.post(
+  "/backup/import",
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const input = importSchema.parse(req.body ?? {});
+    const result = await importSystemBackup(input.backup);
+    res.json({ result });
   })
 );

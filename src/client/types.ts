@@ -44,6 +44,33 @@ export type VersionInfo = {
   releaseVersions: ReleaseVersion[];
 };
 
+export type SystemBackup = {
+  kind: "password-tools-backup";
+  schemaVersion: number;
+  appVersion?: string;
+  exportedAt: string;
+  encryption: {
+    mode: string;
+    requiresSameServerCryptoSecret: boolean;
+  };
+  tables: {
+    users: unknown[];
+    appSettings: unknown[];
+    categories: unknown[];
+    sites: unknown[];
+    accounts: unknown[];
+  };
+};
+
+export type BackupImportResult = {
+  users: number;
+  appSettings: number;
+  categories: number;
+  sites: number;
+  accounts: number;
+  importedAt: string;
+};
+
 export type Category = {
   id: string;
   name: string;

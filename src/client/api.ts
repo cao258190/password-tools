@@ -2,12 +2,14 @@ import type {
   Account,
   AccountInput,
   AdminSettings,
+  BackupImportResult,
   Category,
   PublicSettings,
   SiteDetail,
   SiteInput,
   SiteSummary,
   Stats,
+  SystemBackup,
   TagSummary,
   UpdateStatus,
   User,
@@ -103,6 +105,12 @@ export const api = {
   },
   runUpdate(input: { targetVersion?: string } = {}) {
     return request<{ update: UpdateStatus }>("/api/admin/update", withBody("POST", input));
+  },
+  exportBackup() {
+    return request<{ backup: SystemBackup }>("/api/admin/backup/export");
+  },
+  importBackup(input: { backup: unknown; confirm: "RESTORE" }) {
+    return request<{ result: BackupImportResult }>("/api/admin/backup/import", withBody("POST", input));
   },
   categories() {
     return request<{ categories: Category[] }>("/api/categories");

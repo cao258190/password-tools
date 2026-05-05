@@ -135,6 +135,8 @@ chmod +x deploy.sh
 - `GET /api/admin/version`：管理员检测 GitHub 版本
 - `GET /api/admin/update`：管理员查看 Web 更新任务状态
 - `POST /api/admin/update`：管理员触发服务器预配置更新命令
+- `GET /api/admin/backup/export`：管理员导出全系统备份
+- `POST /api/admin/backup/import`：管理员导入全系统备份并覆盖当前数据
 - `GET /api/categories`：全局固定分类和当前用户计数
 - `GET /api/sites`：网站列表
 - `POST /api/sites`：新增网站
@@ -162,3 +164,5 @@ chmod +x deploy.sh
 - Web 在线更新默认开启；Docker 部署由独立 updater 服务挂载 Docker socket 并重建 compose 服务，不需要时请设置 `WEB_UPDATE_ENABLED=false`
 
 生产环境启动时会检查 `JWT_SECRET`、`SERVER_CRYPTO_SECRET` 和 `ADMIN_PASSWORD`，如果仍是默认值或长度过短会拒绝启动。
+
+管理员导出的系统备份包含用户密码哈希、账号密文字段和分类/网站/账号数据，不包含账号明文密码。账号密文依赖当前服务器的 `SERVER_CRYPTO_SECRET`，迁移或恢复到其他服务器时必须使用同一个 `SERVER_CRYPTO_SECRET`，否则账号密码无法解密。
