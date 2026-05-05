@@ -28,6 +28,21 @@ write_status() {
 EOF_STATUS
 }
 
+compose_up() {
+  pull_policy="${DOCKER_PULL_POLICY:-prefer}"
+  if [ "$pull_policy" = "never" ]; then
+    docker compose --env-file "$env_file" -f "$compose_file" up -d --build
+    return
+  fi
+
+  if docker compose --env-file "$env_file" -f "$compose_file" pull; then
+    docker compose --env-file "$env_file" -f "$compose_file" up -d --no-build
+  else
+    echo "预构建镜像不可用，回退到服务器本地构建。"
+    docker compose --env-file "$env_file" -f "$compose_file" up -d --build
+  fi
+}
+
 run_update() {
   git fetch origin "$branch" --tags
   git pull --ff-only origin "$branch"
@@ -37,8 +52,8 @@ run_update() {
   export APP_VERSION="$app_version"
   export APP_COMMIT="$app_commit"
 
-  docker compose --env-file "$env_file" -f "$compose_file" up -d --build
-  echo "Docker 服务已更新到 $app_commit"
+  compose_up
+  echo "Docker 服务已更新到 $app_commit，版本 $app_version。"
 }
 
 write_status "running" "更新后台容器正在执行" ""

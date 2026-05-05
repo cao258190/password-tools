@@ -66,9 +66,23 @@ UPDATE_ENV_FILE=.env.docker
 UPDATE_COMPOSE_FILE=docker-compose.yml
 UPDATE_DETACHED=true
 UPDATE_STATUS_FILE=/workspace/password-tools/.update-status.json
+API_IMAGE=ghcr.io/cao258190/password-tools-api
+WEB_IMAGE=ghcr.io/cao258190/password-tools-web
+DOCKER_PULL_POLICY=prefer
 ```
 
-`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Web 更新会先启动固定名称的后台更新器容器 `password-tools-updater`，由它在宿主机项目目录中执行 `git pull --ff-only`，然后通过挂载的 `/var/run/docker.sock` 执行 `docker compose --env-file .env.docker up -d --build`，重建前端与后端容器。更新状态会写入 `.update-status.json`，因此 API 容器被重建后页面仍能看到成功或失败结果。
+`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Web 更新会先启动固定名称的后台更新器容器 `password-tools-updater`，由它在宿主机项目目录中执行 `git pull --ff-only`，然后通过挂载的 `/var/run/docker.sock` 更新前端与后端容器。更新状态会写入 `.update-status.json`，因此 API 容器被重建后页面仍能看到成功或失败结果。
+
+默认部署会优先拉取 GitHub Container Registry 上的预构建镜像：
+
+- `ghcr.io/cao258190/password-tools-api:<版本号>`
+- `ghcr.io/cao258190/password-tools-web:<版本号>`
+
+正常发布版本后，服务器只需要下载镜像并重启容器，不会再执行前端构建。若镜像暂时不可用，脚本会自动回退到服务器本地构建。需要强制本地构建时，可在 `.env.docker` 中设置：
+
+```env
+DOCKER_PULL_POLICY=never
+```
 
 为了支持 Docker Web 更新，`api` 容器会挂载：
 
@@ -86,7 +100,8 @@ WEB_UPDATE_ENABLED=false
 ## 常用命令
 
 ```bash
-docker compose --env-file .env.docker up -d --build
+docker compose --env-file .env.docker pull
+docker compose --env-file .env.docker up -d --no-build
 docker compose --env-file .env.docker logs -f
 docker compose --env-file .env.docker down
 ```
