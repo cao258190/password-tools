@@ -3,8 +3,16 @@ set -eu
 
 branch="${UPDATE_CHECK_REF:-master}"
 project_dir="${UPDATE_PROJECT_DIR:-/workspace/password-tools}"
+host_project_dir="${UPDATE_HOST_PROJECT_DIR:-}"
 env_file="${UPDATE_ENV_FILE:-.env.docker}"
 compose_file="${UPDATE_COMPOSE_FILE:-docker-compose.yml}"
+status_file="${UPDATE_STATUS_FILE:-$project_dir/.update-status.json}"
+updater_name="${UPDATE_CONTAINER_NAME:-password-tools-updater}"
+
+if [ -z "$host_project_dir" ]; then
+  echo "未配置 UPDATE_HOST_PROJECT_DIR，Docker Web 更新无法定位宿主机项目目录。" >&2
+  exit 1
+fi
 
 if [ ! -d "$project_dir/.git" ]; then
   echo "更新目录不是 Git 仓库：$project_dir" >&2
@@ -17,18 +25,23 @@ if [ ! -S /var/run/docker.sock ]; then
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
-  echo "容器内不可用 docker compose，请确认镜像安装了 Docker Compose 插件。" >&2
+  echo "容器内不可用 docker compose，请确认 API 镜像已安装 Docker Compose 插件。" >&2
   exit 1
 fi
 
-cd "$project_dir"
+docker rm -f "$updater_name" >/dev/null 2>&1 || true
 
-git fetch origin "$branch" --tags
-git pull --ff-only origin "$branch"
+docker run -d \
+  --name "$updater_name" \
+  --restart no \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$host_project_dir":"$project_dir" \
+  -w "$project_dir" \
+  -e UPDATE_CHECK_REF="$branch" \
+  -e UPDATE_ENV_FILE="$env_file" \
+  -e UPDATE_COMPOSE_FILE="$compose_file" \
+  -e UPDATE_STATUS_FILE="$status_file" \
+  password-tools-api:latest \
+  sh scripts/docker-web-update-worker.sh
 
-export APP_VERSION="${APP_VERSION:-$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "0.0.0")}"
-export APP_COMMIT="${APP_COMMIT:-$(git rev-parse HEAD)}"
-
-docker compose --env-file "$env_file" -f "$compose_file" up -d --build
-
-echo "Docker 服务已更新到 $APP_COMMIT"
+echo "更新后台容器已启动：$updater_name"

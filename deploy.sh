@@ -2,6 +2,7 @@
 set -eu
 
 env_file=".env.docker"
+host_project_dir="$(pwd)"
 
 app_version() {
   node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "0.0.0"
@@ -34,12 +35,27 @@ UPDATE_CHECK_REF=${UPDATE_CHECK_REF:-master}
 WEB_UPDATE_ENABLED=${WEB_UPDATE_ENABLED:-true}
 UPDATE_COMMAND=${UPDATE_COMMAND:-sh scripts/docker-web-update.sh}
 UPDATE_PROJECT_DIR=${UPDATE_PROJECT_DIR:-/workspace/password-tools}
+UPDATE_HOST_PROJECT_DIR=${UPDATE_HOST_PROJECT_DIR:-$host_project_dir}
 UPDATE_ENV_FILE=${UPDATE_ENV_FILE:-.env.docker}
 UPDATE_COMPOSE_FILE=${UPDATE_COMPOSE_FILE:-docker-compose.yml}
+UPDATE_DETACHED=${UPDATE_DETACHED:-true}
+UPDATE_STATUS_FILE=${UPDATE_STATUS_FILE:-/workspace/password-tools/.update-status.json}
 EOF
   echo "Created $env_file with generated secrets."
   echo "Default admin email: $(grep '^ADMIN_EMAIL=' "$env_file" | cut -d= -f2-)"
   echo "Default admin password: $(grep '^ADMIN_PASSWORD=' "$env_file" | cut -d= -f2-)"
+fi
+
+if ! grep -q '^UPDATE_HOST_PROJECT_DIR=' "$env_file"; then
+  printf '\nUPDATE_HOST_PROJECT_DIR=%s\n' "$host_project_dir" >> "$env_file"
+fi
+
+if ! grep -q '^UPDATE_DETACHED=' "$env_file"; then
+  printf 'UPDATE_DETACHED=true\n' >> "$env_file"
+fi
+
+if ! grep -q '^UPDATE_STATUS_FILE=' "$env_file"; then
+  printf 'UPDATE_STATUS_FILE=/workspace/password-tools/.update-status.json\n' >> "$env_file"
 fi
 
 export APP_VERSION="${APP_VERSION:-$(app_version)}"

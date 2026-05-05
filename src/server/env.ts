@@ -39,6 +39,8 @@ export const env = {
   updateCheckRef: process.env.UPDATE_CHECK_REF ?? "master",
   webUpdateEnabled: process.env.WEB_UPDATE_ENABLED === undefined ? true : process.env.WEB_UPDATE_ENABLED === "true",
   updateCommand: process.env.UPDATE_COMMAND ?? defaultUpdateCommand,
+  updateDetached: process.env.UPDATE_DETACHED === "true",
+  updateStatusFile: process.env.UPDATE_STATUS_FILE ?? ".update-status.json",
   adminEmail: (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase(),
   adminPassword,
   registrationEnabledByDefault: process.env.REGISTRATION_ENABLED === "true",

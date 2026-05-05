@@ -1,4 +1,6 @@
 import { exec } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { env } from "../env.js";
 import { HttpError } from "../http.js";
@@ -6,6 +8,7 @@ import { HttpError } from "../http.js";
 const execAsync = promisify(exec);
 const githubApiBase = "https://api.github.com";
 const requestTimeoutMs = 8000;
+const updateRunningTimeoutMs = 1000 * 60 * 20;
 
 export type VersionInfo = {
   currentVersion: string;
@@ -33,6 +36,60 @@ let cachedInfo: VersionInfo | null = null;
 let cachedAt = 0;
 let updateRunning = false;
 let lastUpdate: UpdateStatus | null = null;
+
+function updateStatusFilePath() {
+  return resolve(process.cwd(), env.updateStatusFile);
+}
+
+function readStoredUpdateStatus() {
+  if (!env.updateStatusFile || !existsSync(updateStatusFilePath())) return null;
+  try {
+    const status = JSON.parse(readFileSync(updateStatusFilePath(), "utf8")) as UpdateStatus;
+    if (!["idle", "running", "success", "failed"].includes(status.status)) return null;
+    if (status.status === "running") {
+      const startedAt = Date.parse(status.startedAt);
+      if (Number.isFinite(startedAt) && Date.now() - startedAt > updateRunningTimeoutMs) {
+        const staleStatus: UpdateStatus = {
+          ...status,
+          status: "failed",
+          finishedAt: new Date().toISOString(),
+          message: "更新任务超时，请查看服务器 Docker 日志",
+          output: trimOutput(status.output)
+        };
+        writeStoredUpdateStatus(staleStatus);
+        return staleStatus;
+      }
+    }
+    return status;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredUpdateStatus(status: UpdateStatus) {
+  if (!env.updateStatusFile) return;
+  try {
+    writeFileSync(updateStatusFilePath(), `${JSON.stringify(status, null, 2)}\n`);
+  } catch {
+    // 状态文件只用于页面恢复更新进度，写入失败不影响实际更新命令执行。
+  }
+}
+
+function currentUpdateState() {
+  const storedStatus = readStoredUpdateStatus();
+  const effectiveLastUpdate = storedStatus ?? lastUpdate;
+  const effectiveRunning = updateRunning || effectiveLastUpdate?.status === "running";
+
+  if (storedStatus) {
+    lastUpdate = storedStatus;
+    updateRunning = storedStatus.status === "running";
+  }
+
+  return {
+    updateRunning: effectiveRunning,
+    lastUpdate: effectiveLastUpdate
+  };
+}
 
 function normalizeVersion(version: string | null | undefined) {
   return (version ?? "").trim().replace(/^v/i, "");
@@ -136,11 +193,12 @@ function currentCommit() {
 
 export async function checkVersion(force = false): Promise<VersionInfo> {
   const now = Date.now();
+  const updateState = currentUpdateState();
   if (!force && cachedInfo && now - cachedAt < 1000 * 60 * 5) {
     return {
       ...cachedInfo,
-      updateRunning,
-      lastUpdate
+      updateRunning: updateState.updateRunning,
+      lastUpdate: updateState.lastUpdate
     };
   }
 
@@ -183,18 +241,19 @@ export async function checkVersion(force = false): Promise<VersionInfo> {
     updateEnabled: env.webUpdateEnabled && Boolean(env.updateCommand),
     source,
     checkedAt: new Date().toISOString(),
-    updateRunning,
-    lastUpdate
+    updateRunning: updateState.updateRunning,
+    lastUpdate: updateState.lastUpdate
   };
   cachedAt = now;
   return cachedInfo;
 }
 
 export function getUpdateStatus() {
+  const updateState = currentUpdateState();
   return {
     updateEnabled: env.webUpdateEnabled && Boolean(env.updateCommand),
-    updateRunning,
-    lastUpdate
+    updateRunning: updateState.updateRunning,
+    lastUpdate: updateState.lastUpdate
   };
 }
 
@@ -202,7 +261,7 @@ export async function runUpdate() {
   if (!env.webUpdateEnabled || !env.updateCommand) {
     throw new HttpError(403, "服务器未开启 Web 在线更新");
   }
-  if (updateRunning) {
+  if (currentUpdateState().updateRunning) {
     throw new HttpError(409, "已有更新任务正在执行");
   }
 
@@ -214,21 +273,37 @@ export async function runUpdate() {
     message: "更新任务正在执行",
     output: ""
   };
+  writeStoredUpdateStatus(lastUpdate);
+
+  const commandTimeout = env.updateDetached ? 1000 * 60 : 1000 * 60 * 5;
 
   void execAsync(env.updateCommand, {
     cwd: process.cwd(),
-    timeout: 1000 * 60 * 5,
+    timeout: commandTimeout,
     windowsHide: true,
     maxBuffer: 1024 * 1024
   })
     .then((result) => {
-      lastUpdate = {
-        ...(lastUpdate as UpdateStatus),
-        status: "success",
-        finishedAt: new Date().toISOString(),
-        message: "更新命令已执行完成",
-        output: trimOutput(`${result.stdout}\n${result.stderr}`)
-      };
+      if (env.updateDetached) {
+        lastUpdate = {
+          ...(lastUpdate as UpdateStatus),
+          status: "running",
+          message: "更新后台容器已启动",
+          output: trimOutput(`${result.stdout}\n${result.stderr}`)
+        };
+        cachedAt = 0;
+        return;
+      } else {
+        lastUpdate = {
+          ...(lastUpdate as UpdateStatus),
+          status: "success",
+          finishedAt: new Date().toISOString(),
+          message: "更新命令已执行完成",
+          output: trimOutput(`${result.stdout}\n${result.stderr}`)
+        };
+        updateRunning = false;
+      }
+      writeStoredUpdateStatus(lastUpdate);
       cachedAt = 0;
     })
     .catch((error: unknown) => {
@@ -245,9 +320,8 @@ export async function runUpdate() {
         message: "更新命令执行失败",
         output: trimOutput(output)
       };
-    })
-    .finally(() => {
       updateRunning = false;
+      writeStoredUpdateStatus(lastUpdate);
     });
 
   return lastUpdate;

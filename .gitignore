@@ -7,6 +7,7 @@ docker-data/
 *.db
 *.db-journal
 *.sqlite
+.update-status.json
 coverage/
 playwright-report/
 ui-check*.png

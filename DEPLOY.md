@@ -61,11 +61,14 @@ Web 在线更新默认开启，首次生成的 `.env.docker` 会写入：
 WEB_UPDATE_ENABLED=true
 UPDATE_COMMAND="sh scripts/docker-web-update.sh"
 UPDATE_PROJECT_DIR=/workspace/password-tools
+UPDATE_HOST_PROJECT_DIR=/www/wwwroot/password-tools
 UPDATE_ENV_FILE=.env.docker
 UPDATE_COMPOSE_FILE=docker-compose.yml
+UPDATE_DETACHED=true
+UPDATE_STATUS_FILE=/workspace/password-tools/.update-status.json
 ```
 
-`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Compose 默认命令会在挂载的项目目录中执行 `git pull --ff-only`，然后通过挂载的 `/var/run/docker.sock` 执行 `docker compose --env-file .env.docker up -d --build`，重建前端与后端容器。
+`UPDATE_COMMAND` 只由服务器环境变量提供，页面不能传入任意命令。Docker Web 更新会先启动固定名称的后台更新器容器 `password-tools-updater`，由它在宿主机项目目录中执行 `git pull --ff-only`，然后通过挂载的 `/var/run/docker.sock` 执行 `docker compose --env-file .env.docker up -d --build`，重建前端与后端容器。更新状态会写入 `.update-status.json`，因此 API 容器被重建后页面仍能看到成功或失败结果。
 
 为了支持 Docker Web 更新，`api` 容器会挂载：
 
@@ -78,7 +81,7 @@ UPDATE_COMPOSE_FILE=docker-compose.yml
 WEB_UPDATE_ENABLED=false
 ```
 
-如果使用非标准项目路径或 compose 文件名，请调整 `UPDATE_PROJECT_DIR`、`UPDATE_ENV_FILE` 和 `UPDATE_COMPOSE_FILE`。
+如果使用非标准项目路径或 compose 文件名，请调整 `UPDATE_HOST_PROJECT_DIR`、`UPDATE_PROJECT_DIR`、`UPDATE_ENV_FILE` 和 `UPDATE_COMPOSE_FILE`。`UPDATE_HOST_PROJECT_DIR` 必须是宿主机真实路径，例如 `/www/wwwroot/password-tools`。
 
 ## 常用命令
 
