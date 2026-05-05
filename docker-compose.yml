@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
       args:
-        APP_VERSION: ${APP_VERSION:-1.0.0}
+        APP_VERSION: ${APP_VERSION:-1.0.1}
         APP_COMMIT: ${APP_COMMIT:-}
     container_name: password-tools-api
     restart: unless-stopped
