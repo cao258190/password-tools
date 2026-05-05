@@ -219,6 +219,24 @@ describe("password vault API", () => {
   it("rejects invalid or unsafe backup imports", async () => {
     const admin = await loginAgent();
     const token = await csrfToken(admin);
+    await admin
+      .post("/api/sites")
+      .set(csrfHeader, token)
+      .send({
+        name: "Unsafe Backup Site",
+        primaryUrl: "https://unsafe-backup.example.com",
+        backupUrls: [],
+        tags: [],
+        accounts: [
+          {
+            label: "备份账号",
+            username: "unsafe-backup@example.com",
+            password: "UnsafeBackup#2026"
+          }
+        ]
+      })
+      .expect(201);
+
     const exported = await admin.get("/api/admin/backup/export").expect(200);
     const backup = {
       ...exported.body.backup,
@@ -241,6 +259,31 @@ describe("password vault API", () => {
       .post("/api/admin/backup/import")
       .set(csrfHeader, token)
       .send({ confirm: "NOPE", backup: exported.body.backup })
+      .expect(400);
+
+    const crossUserBackup = {
+      ...exported.body.backup,
+      tables: {
+        ...exported.body.backup.tables,
+        users: [
+          ...exported.body.backup.tables.users,
+          {
+            ...exported.body.backup.tables.users[0],
+            id: "backup-other-user",
+            email: "backup-other-user@example.com",
+            isAdmin: false
+          }
+        ],
+        accounts: exported.body.backup.tables.accounts.map((account: { userId: string }, index: number) =>
+          index === 0 ? { ...account, userId: "backup-other-user" } : account
+        )
+      }
+    };
+
+    await admin
+      .post("/api/admin/backup/import")
+      .set(csrfHeader, token)
+      .send({ confirm: "RESTORE", backup: crossUserBackup })
       .expect(400);
   });
 

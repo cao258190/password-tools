@@ -7,9 +7,9 @@ import { useAuthStore } from "../stores/auth";
 const router = useRouter();
 const auth = useAuthStore();
 const mode = ref<"login" | "register">("login");
-const email = ref("demo@example.com");
-const password = ref("demo123456");
-const name = ref("U");
+const email = ref("");
+const password = ref("");
+const name = ref("");
 const error = ref("");
 
 const title = computed(() => (mode.value === "login" ? "欢迎回来" : "创建保险库"));

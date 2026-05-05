@@ -120,6 +120,7 @@ function validateBackupRelations(backup: ParsedSystemBackup) {
   const userIds = new Set(backup.tables.users.map((user) => user.id));
   const categoryIds = new Set(backup.tables.categories.map((category) => category.id));
   const siteIds = new Set(backup.tables.sites.map((site) => site.id));
+  const siteUserIds = new Map(backup.tables.sites.map((site) => [site.id, site.userId]));
 
   if (!backup.tables.users.some((user) => user.isAdmin)) {
     throw new HttpError(400, "备份中至少需要包含一个管理员账号");
@@ -148,6 +149,9 @@ function validateBackupRelations(backup: ParsedSystemBackup) {
     }
     if (!siteIds.has(account.siteId)) {
       throw new HttpError(400, `账号 ${account.label} 引用了不存在的网站`);
+    }
+    if (siteUserIds.get(account.siteId) !== account.userId) {
+      throw new HttpError(400, `账号 ${account.label} 与所属网站的用户不一致`);
     }
   }
 }
