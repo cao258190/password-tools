@@ -20,7 +20,8 @@ const defaultCategories = [
 const reset = process.argv.includes("--reset");
 const databaseUrl = process.env.DATABASE_URL ?? "file:./dev.db";
 const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
-const adminPassword = process.env.ADMIN_PASSWORD ?? "admin123456";
+const defaultAdminPassword = "admin123456";
+const adminPassword = process.env.ADMIN_PASSWORD ?? defaultAdminPassword;
 const registrationEnabledByDefault = process.env.REGISTRATION_ENABLED === "true";
 
 if (!databaseUrl.startsWith("file:")) {
