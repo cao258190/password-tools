@@ -57,6 +57,7 @@ export type Account = {
   password: string;
   strength: PasswordStrength;
   favorite: boolean;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;
@@ -74,6 +75,7 @@ export type SiteSummary = {
   iconBg: string;
   iconColor: string;
   favorite: boolean;
+  sortOrder: number;
   tags: string[];
   note: string;
   accountCount: number;
@@ -105,6 +107,7 @@ export type SiteInput = {
   iconBg: string;
   iconColor: string;
   favorite: boolean;
+  sortOrder: number;
   tags: string[];
   note?: string;
 };
@@ -115,4 +118,5 @@ export type AccountInput = {
   password: string;
   strength?: PasswordStrength;
   favorite?: boolean;
+  sortOrder?: number;
 };

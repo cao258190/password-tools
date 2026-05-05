@@ -30,6 +30,7 @@ const form = reactive({
   iconBg: backgroundColors[0],
   iconColor: "#ffffff",
   favorite: false,
+  sortOrder: 0,
   tags: "",
   note: ""
 });
@@ -47,6 +48,7 @@ watch(
     form.iconBg = props.site?.iconBg ?? backgroundColors[0];
     form.iconColor = props.site?.iconColor ?? (form.iconBg.toLowerCase() === "#ffffff" ? "#111827" : "#ffffff");
     form.favorite = props.site?.favorite ?? false;
+    form.sortOrder = props.site?.sortOrder ?? 0;
     form.tags = props.site?.tags.join(", ") ?? "";
     form.note = props.site?.note ?? "";
   },
@@ -71,6 +73,7 @@ function submit() {
     iconBg: form.iconBg,
     iconColor: form.iconColor,
     favorite: form.favorite,
+    sortOrder: Number(form.sortOrder) || 0,
     tags: splitLines(form.tags),
     note: form.note
   });
@@ -121,6 +124,11 @@ function submit() {
           </select>
         </label>
       </div>
+
+      <label>
+        排序号
+        <input v-model.number="form.sortOrder" type="number" step="1" placeholder="数字越大越靠前" />
+      </label>
 
       <div class="icon-color-editor">
         <BrandMark

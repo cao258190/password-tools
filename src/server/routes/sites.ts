@@ -16,7 +16,8 @@ const accountCreateSchema = z.object({
   username: z.string().trim().min(1).max(120),
   password: z.string().min(1).max(256),
   strength: z.enum(["weak", "medium", "strong"]).optional(),
-  favorite: z.boolean().optional()
+  favorite: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().min(-999999).max(999999).default(0)
 });
 
 const siteCreateSchema = z.object({
@@ -29,6 +30,7 @@ const siteCreateSchema = z.object({
   iconBg: colorSchema.default("#2563eb"),
   iconColor: colorSchema.default("#ffffff"),
   favorite: z.boolean().default(false),
+  sortOrder: z.coerce.number().int().min(-999999).max(999999).default(0),
   tags: z.array(z.string().trim().min(1).max(20)).default([]),
   note: z.string().trim().max(800).optional(),
   accounts: z.array(accountCreateSchema).default([])
@@ -54,6 +56,7 @@ function serializeSite(site: SiteWithRelations, userSalt?: string) {
     iconBg: site.iconBg,
     iconColor: site.iconColor,
     favorite: site.favorite,
+    sortOrder: site.sortOrder,
     tags: parseStringArray(site.tags),
     note: site.note ?? "",
     accountCount: site.accounts.length,
@@ -69,6 +72,7 @@ function serializeSite(site: SiteWithRelations, userSalt?: string) {
           password: decryptSecret(account.passwordSecret, userSalt),
           strength: account.strength,
           favorite: account.favorite,
+          sortOrder: account.sortOrder,
           createdAt: account.createdAt,
           updatedAt: account.updatedAt,
           lastUsedAt: account.lastUsedAt
@@ -101,7 +105,7 @@ sitesRouter.get(
     const tag = String(req.query.tag ?? "").trim();
     const favoriteOnly = String(req.query.favorite ?? "") === "true" || req.query.scope === "favorites";
     const scope = String(req.query.scope ?? "all");
-    const sort = String(req.query.sort ?? "recent");
+    const sort = String(req.query.sort ?? "sort");
 
     const sites = await prisma.site.findMany({
       where: {
@@ -111,9 +115,9 @@ sitesRouter.get(
       },
       include: {
         category: true,
-        accounts: { orderBy: { updatedAt: "desc" } }
+        accounts: { orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }] }
       },
-      orderBy: [{ lastUsedAt: "desc" }, { updatedAt: "desc" }]
+      orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }]
     });
 
     const filtered = sites.filter((site) => {
@@ -125,10 +129,10 @@ sitesRouter.get(
     filtered.sort((left, right) => {
       if (sort === "name") return left.name.localeCompare(right.name);
       if (sort === "accounts") return right.accounts.length - left.accounts.length || left.name.localeCompare(right.name);
-      if (scope === "recent") {
+      if (sort === "recent" || scope === "recent") {
         return (right.lastUsedAt?.getTime() ?? 0) - (left.lastUsedAt?.getTime() ?? 0);
       }
-      return right.updatedAt.getTime() - left.updatedAt.getTime();
+      return right.sortOrder - left.sortOrder || right.updatedAt.getTime() - left.updatedAt.getTime();
     });
 
     res.json({
@@ -164,6 +168,7 @@ sitesRouter.post(
         iconBg: input.iconBg,
         iconColor: input.iconColor,
         favorite: input.favorite,
+        sortOrder: input.sortOrder,
         tags: stringifyStringArray(input.tags),
         note: input.note,
         accounts: {
@@ -173,7 +178,8 @@ sitesRouter.post(
             username: account.username,
             passwordSecret: encryptSecret(account.password, user.cryptoSalt),
             strength: account.strength ?? evaluateStrength(account.password),
-            favorite: account.favorite ?? false
+            favorite: account.favorite ?? false,
+            sortOrder: account.sortOrder
           }))
         }
       },
@@ -193,7 +199,7 @@ sitesRouter.get(
       where: { id: req.params.id, userId: user.id },
       include: {
         category: true,
-        accounts: { orderBy: { updatedAt: "desc" } }
+        accounts: { orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }] }
       }
     });
 
@@ -239,12 +245,13 @@ sitesRouter.patch(
         iconBg: input.iconBg,
         iconColor: input.iconColor,
         favorite: input.favorite,
+        sortOrder: input.sortOrder,
         tags: stringifyStringArray(input.tags),
         note: input.note
       },
       include: {
         category: true,
-        accounts: { orderBy: { updatedAt: "desc" } }
+        accounts: { orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }] }
       }
     });
 
@@ -292,7 +299,8 @@ sitesRouter.post(
         username: input.username,
         passwordSecret: encryptSecret(input.password, user.cryptoSalt),
         strength: input.strength ?? evaluateStrength(input.password),
-        favorite: input.favorite ?? false
+        favorite: input.favorite ?? false,
+        sortOrder: input.sortOrder
       }
     });
 
@@ -310,6 +318,7 @@ sitesRouter.post(
         password: input.password,
         strength: account.strength,
         favorite: account.favorite,
+        sortOrder: account.sortOrder,
         createdAt: account.createdAt,
         updatedAt: account.updatedAt,
         lastUsedAt: account.lastUsedAt

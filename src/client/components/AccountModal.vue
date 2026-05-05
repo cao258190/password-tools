@@ -21,6 +21,7 @@ const form = reactive({
   label: "主账号",
   username: "",
   password: "",
+  sortOrder: 0,
   generating: false
 });
 
@@ -37,6 +38,7 @@ watch(
     form.label = props.account?.label ?? "主账号";
     form.username = props.account?.username ?? "";
     form.password = props.account?.password ?? "";
+    form.sortOrder = props.account?.sortOrder ?? 0;
     if (props.open && props.mode === "generate") {
       void generate();
     }
@@ -59,7 +61,8 @@ function submit() {
     label: form.label,
     username: form.username,
     password: form.password,
-    strength: strength.value
+    strength: strength.value,
+    sortOrder: Number(form.sortOrder) || 0
   });
 }
 </script>
@@ -77,6 +80,11 @@ function submit() {
           <input v-model="form.username" required placeholder="user@example.com" />
         </label>
       </div>
+
+      <label>
+        排序号
+        <input v-model.number="form.sortOrder" type="number" step="1" placeholder="数字越大越靠前" />
+      </label>
 
       <label>
         密码

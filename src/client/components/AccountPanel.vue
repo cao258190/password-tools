@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ArrowDownAZ, ChevronDown, Copy, Eye, EyeOff, Pencil, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-vue-next";
+import { ArrowDownAZ, ChevronDown, Copy, Eye, EyeOff, ListOrdered, Pencil, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-vue-next";
 import type { Account, SiteDetail } from "../types";
 import { useVaultStore } from "../stores/vault";
 import { relativeTime, strengthLabel } from "../utils/password";
@@ -21,7 +21,7 @@ const emit = defineEmits<{
 const vault = useVaultStore();
 const sortMenuOpen = ref(false);
 const sortMenuHost = ref<HTMLElement | null>(null);
-const accountSort = ref<"updated" | "strength" | "label">("updated");
+const accountSort = ref<"sort" | "updated" | "strength" | "label">("sort");
 
 useDismissableLayer(
   sortMenuHost,
@@ -45,7 +45,10 @@ const sortedAccounts = computed(() => {
   if (accountSort.value === "label") {
     return accounts.sort((left, right) => left.label.localeCompare(right.label));
   }
-  return accounts.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+  if (accountSort.value === "updated") {
+    return accounts.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+  }
+  return accounts.sort((left, right) => right.sortOrder - left.sortOrder || new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 });
 
 async function copyValue(value: string, id: string) {
@@ -69,6 +72,10 @@ async function copyValue(value: string, id: string) {
           <ChevronDown :size="16" />
         </button>
         <div v-if="sortMenuOpen" class="menu-popover account-sort-menu">
+          <button class="menu-item" :class="{ active: accountSort === 'sort' }" type="button" @click="accountSort = 'sort'; sortMenuOpen = false">
+            <ListOrdered :size="15" />
+            排序号优先
+          </button>
           <button class="menu-item" :class="{ active: accountSort === 'updated' }" type="button" @click="accountSort = 'updated'; sortMenuOpen = false">
             <RefreshCw :size="15" />
             最近修改
@@ -145,7 +152,7 @@ async function copyValue(value: string, id: string) {
             <i />
           </div>
         </div>
-        <small>最近修改：{{ relativeTime(account.updatedAt) }}</small>
+        <small>排序号：{{ account.sortOrder }} · 最近修改：{{ relativeTime(account.updatedAt) }}</small>
       </article>
     </div>
   </aside>

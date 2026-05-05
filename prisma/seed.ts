@@ -55,13 +55,14 @@ async function main() {
         iconBg: site.iconBg,
         iconColor: site.iconColor,
         favorite: site.favorite,
+        sortOrder: demoSites.length - index,
         tags: JSON.stringify(site.tags),
         note: site.note,
         lastUsedAt: new Date(now - index * 60 * 60 * 1000)
       }
     });
 
-    for (const account of site.accounts) {
+    for (const [accountIndex, account] of site.accounts.entries()) {
       await prisma.account.create({
         data: {
           userId: user.id,
@@ -71,6 +72,7 @@ async function main() {
           passwordSecret: encryptSecret(account.password, cryptoSalt),
           strength: account.strength ?? evaluateStrength(account.password),
           favorite: account.favorite,
+          sortOrder: site.accounts.length - accountIndex,
           lastUsedAt: new Date(now - index * 60 * 60 * 1000)
         }
       });

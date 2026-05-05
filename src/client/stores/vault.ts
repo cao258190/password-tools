@@ -3,7 +3,7 @@ import { api } from "../api";
 import type { AccountInput, Category, SiteDetail, SiteInput, SiteSummary, Stats, TagSummary } from "../types";
 
 export type ViewFilter = "all" | "recent" | "favorites";
-export type SiteSortMode = "recent" | "name" | "accounts";
+export type SiteSortMode = "sort" | "recent" | "name" | "accounts";
 
 type VaultState = {
   sites: SiteSummary[];
@@ -89,7 +89,7 @@ export const useVaultStore = defineStore("vault", {
     categoryFilter: "all",
     tagFilter: "",
     viewFilter: "all",
-    sortMode: "recent",
+    sortMode: "sort",
     loading: false,
     detailLoading: false,
     error: "",
@@ -195,7 +195,7 @@ export const useVaultStore = defineStore("vault", {
       this.categoryFilter = "all";
       this.tagFilter = "";
       this.viewFilter = "all";
-      this.sortMode = "recent";
+      this.sortMode = "sort";
       await this.loadSites();
     },
     async createSite(input: SiteInput) {

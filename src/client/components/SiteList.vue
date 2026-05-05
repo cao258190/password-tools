@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { ArrowDownAZ, Check, ChevronDown, Clock3, SlidersHorizontal, Star, UsersRound, X } from "lucide-vue-next";
+import { ArrowDownAZ, Check, ChevronDown, Clock3, ListOrdered, SlidersHorizontal, Star, UsersRound, X } from "lucide-vue-next";
 import BrandMark from "./BrandMark.vue";
 import { useVaultStore } from "../stores/vault";
 import { relativeTime } from "../utils/password";
@@ -83,6 +83,10 @@ async function chooseSite(id: string) {
         <SlidersHorizontal :size="16" />
       </button>
         <div v-if="filterMenuOpen" class="menu-popover filter-menu">
+          <button class="menu-item" :class="{ active: vault.sortMode === 'sort' }" type="button" @click="void vault.setSort('sort'); filterMenuOpen = false">
+            <ListOrdered :size="15" />
+            排序号优先
+          </button>
           <button class="menu-item" :class="{ active: vault.sortMode === 'recent' }" type="button" @click="void vault.setSort('recent'); filterMenuOpen = false">
             <Clock3 :size="15" />
             最近修改优先
@@ -124,6 +128,7 @@ async function chooseSite(id: string) {
         <span class="site-row-main">
           <strong>{{ site.name }}</strong>
           <small>{{ site.accountCount }} 个账号</small>
+          <small>排序号：{{ site.sortOrder }}</small>
         </span>
         <span class="site-row-meta">
           <span class="site-favorite-slot">

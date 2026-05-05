@@ -13,7 +13,8 @@ const accountPatchSchema = z.object({
   username: z.string().trim().min(1).max(120).optional(),
   password: z.string().min(1).max(256).optional(),
   strength: z.enum(["weak", "medium", "strong"]).optional(),
-  favorite: z.boolean().optional()
+  favorite: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().min(-999999).max(999999).optional()
 });
 
 accountsRouter.patch(
@@ -36,6 +37,7 @@ accountsRouter.patch(
         label: input.label,
         username: input.username,
         favorite: input.favorite,
+        sortOrder: input.sortOrder,
         passwordSecret: input.password
           ? encryptSecret(input.password, user.cryptoSalt)
           : undefined,

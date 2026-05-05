@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS "Site" (
   "iconBg" TEXT NOT NULL DEFAULT '#2563eb',
   "iconColor" TEXT NOT NULL DEFAULT '#ffffff',
   "favorite" BOOLEAN NOT NULL DEFAULT false,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
   "tags" TEXT NOT NULL DEFAULT '[]',
   "note" TEXT,
   "lastUsedAt" DATETIME,
@@ -99,6 +100,7 @@ CREATE TABLE IF NOT EXISTS "Account" (
   "passwordSecret" TEXT NOT NULL,
   "strength" TEXT NOT NULL DEFAULT 'weak',
   "favorite" BOOLEAN NOT NULL DEFAULT false,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
   "lastUsedAt" DATETIME,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL,
@@ -134,6 +136,17 @@ SET "iconColor" = CASE
   ELSE '#ffffff'
 END
 `);
+}
+if (!siteColumns.includes("sortOrder")) {
+  db.exec(`ALTER TABLE "Site" ADD COLUMN "sortOrder" INTEGER NOT NULL DEFAULT 0;`);
+}
+
+const accountColumns = db
+  .prepare(`PRAGMA table_info("Account")`)
+  .all()
+  .map((column) => column.name);
+if (!accountColumns.includes("sortOrder")) {
+  db.exec(`ALTER TABLE "Account" ADD COLUMN "sortOrder" INTEGER NOT NULL DEFAULT 0;`);
 }
 
 const categoryColumns = db

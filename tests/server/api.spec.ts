@@ -396,6 +396,60 @@ describe("password vault API", () => {
     expect(byTag.body.sites).toHaveLength(1);
   });
 
+  it("orders sites and accounts by sort order descending by default", async () => {
+    const agent = await registerAgent("sort@example.com");
+    const token = await csrfToken(agent);
+
+    await agent
+      .post("/api/sites")
+      .set(csrfHeader, token)
+      .send({
+        name: "Low Sort",
+        primaryUrl: "https://low.example.com",
+        backupUrls: [],
+        sortOrder: 10,
+        tags: [],
+        accounts: []
+      })
+      .expect(201);
+
+    const high = await agent
+      .post("/api/sites")
+      .set(csrfHeader, token)
+      .send({
+        name: "High Sort",
+        primaryUrl: "https://high.example.com",
+        backupUrls: [],
+        sortOrder: 90,
+        tags: [],
+        accounts: [
+          {
+            label: "低排序账号",
+            username: "low-account@example.com",
+            password: "PlainPass#2026",
+            sortOrder: 1
+          },
+          {
+            label: "高排序账号",
+            username: "high-account@example.com",
+            password: "PlainPass#2026",
+            sortOrder: 20
+          }
+        ]
+      })
+      .expect(201);
+
+    const list = await agent.get("/api/sites").expect(200);
+    expect(list.body.sites[0].name).toBe("High Sort");
+    expect(list.body.sites[0].sortOrder).toBe(90);
+
+    const detail = await agent.get(`/api/sites/${high.body.site.id}`).expect(200);
+    expect(detail.body.site.accounts.map((account: { label: string }) => account.label)).toEqual([
+      "高排序账号",
+      "低排序账号"
+    ]);
+  });
+
   it("returns tag counts for sidebar filters", async () => {
     const agent = await registerAgent("tags@example.com");
     const token = await csrfToken(agent);

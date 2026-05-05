@@ -119,7 +119,7 @@ export const api = {
     tag?: string;
     favorite?: boolean;
     scope?: "all" | "recent" | "favorites";
-    sort?: "recent" | "name" | "accounts";
+    sort?: "sort" | "recent" | "name" | "accounts";
   } = {}) {
     const query = new URLSearchParams();
     if (params.search) query.set("search", params.search);
