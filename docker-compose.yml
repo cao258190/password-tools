@@ -19,8 +19,8 @@ services:
       GITHUB_OWNER: ${GITHUB_OWNER:-cao258190}
       GITHUB_REPO: ${GITHUB_REPO:-password-tools}
       UPDATE_CHECK_REF: ${UPDATE_CHECK_REF:-master}
-      WEB_UPDATE_ENABLED: ${WEB_UPDATE_ENABLED:-false}
-      UPDATE_COMMAND: ${UPDATE_COMMAND:-}
+      WEB_UPDATE_ENABLED: ${WEB_UPDATE_ENABLED:-true}
+      UPDATE_COMMAND: ${UPDATE_COMMAND:-npm run web:update}
     volumes:
       - password_tools_data:/app/prisma/data
     ports:

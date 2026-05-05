@@ -31,8 +31,8 @@ REGISTRATION_ENABLED=${REGISTRATION_ENABLED:-false}
 GITHUB_OWNER=${GITHUB_OWNER:-cao258190}
 GITHUB_REPO=${GITHUB_REPO:-password-tools}
 UPDATE_CHECK_REF=${UPDATE_CHECK_REF:-master}
-WEB_UPDATE_ENABLED=${WEB_UPDATE_ENABLED:-false}
-UPDATE_COMMAND=${UPDATE_COMMAND:-}
+WEB_UPDATE_ENABLED=${WEB_UPDATE_ENABLED:-true}
+UPDATE_COMMAND=${UPDATE_COMMAND:-npm run web:update}
 EOF
   echo "Created $env_file with generated secrets."
   echo "Default admin email: $(grep '^ADMIN_EMAIL=' "$env_file" | cut -d= -f2-)"

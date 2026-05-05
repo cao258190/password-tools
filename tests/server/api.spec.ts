@@ -108,7 +108,7 @@ describe("password vault API", () => {
       .expect(403);
   });
 
-  it("lets admins check GitHub version while web updates stay disabled by default", async () => {
+  it("lets admins check GitHub version and keeps the update endpoint admin-only", async () => {
     const admin = await loginAgent();
     const token = await csrfToken(admin);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
@@ -124,12 +124,14 @@ describe("password vault API", () => {
     expect(fetchMock).toHaveBeenCalled();
     expect(version.body.version.latestVersion).toBe("v9.9.9");
     expect(version.body.version.updateAvailable).toBe(true);
-    expect(version.body.version.updateEnabled).toBe(false);
+    expect(version.body.version.updateEnabled).toBe(true);
 
-    await admin.post("/api/admin/update").set(csrfHeader, token).expect(403);
+    const update = await admin.post("/api/admin/update").set(csrfHeader, token).expect(202);
+    expect(update.body.update.status).toBe("running");
 
     const normalUser = await registerAgent("not-admin@example.com");
     await normalUser.get("/api/admin/version?force=true").expect(403);
+    await normalUser.post("/api/admin/update").set(csrfHeader, await csrfToken(normalUser)).expect(403);
   });
 
   it("rejects mutating requests without CSRF token", async () => {

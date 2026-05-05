@@ -6,6 +6,8 @@ const isProduction = process.env.NODE_ENV === "production";
 const defaultJwtSecret = "dev-jwt-secret-change-me";
 const defaultCryptoSecret = "dev-crypto-secret-change-me";
 const defaultAdminPassword = "admin123456";
+const defaultUpdateCommand =
+  process.env.NODE_ENV === "test" ? "node -e \"console.log('test update')\"" : "npm run web:update";
 const jwtSecret = process.env.JWT_SECRET ?? defaultJwtSecret;
 const cryptoSecret = process.env.SERVER_CRYPTO_SECRET ?? defaultCryptoSecret;
 const adminPassword = process.env.ADMIN_PASSWORD ?? defaultAdminPassword;
@@ -35,8 +37,8 @@ export const env = {
   githubOwner: process.env.GITHUB_OWNER ?? "cao258190",
   githubRepo: process.env.GITHUB_REPO ?? "password-tools",
   updateCheckRef: process.env.UPDATE_CHECK_REF ?? "master",
-  webUpdateEnabled: process.env.WEB_UPDATE_ENABLED === "true",
-  updateCommand: process.env.UPDATE_COMMAND ?? "",
+  webUpdateEnabled: process.env.WEB_UPDATE_ENABLED === undefined ? true : process.env.WEB_UPDATE_ENABLED === "true",
+  updateCommand: process.env.UPDATE_COMMAND ?? defaultUpdateCommand,
   adminEmail: (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase(),
   adminPassword,
   registrationEnabledByDefault: process.env.REGISTRATION_ENABLED === "true",
