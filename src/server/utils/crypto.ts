@@ -4,6 +4,9 @@ import { env } from "../env.js";
 const algorithm = "aes-256-gcm";
 
 function deriveKey(userSalt: string) {
+  if (!env.cryptoSecret) {
+    throw new Error("Legacy server crypto secret is not configured");
+  }
   return scryptSync(env.cryptoSecret, userSalt, 32);
 }
 

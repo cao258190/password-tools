@@ -4,7 +4,10 @@ export type User = {
   id: string;
   email: string;
   name: string | null;
+  cryptoSalt: string;
   isAdmin: boolean;
+  vaultKdfIterations: number;
+  vaultVerifier: string | null;
 };
 
 export type PublicSettings = {
@@ -91,6 +94,11 @@ export type Account = {
   label: string;
   username: string;
   password: string;
+  passwordSecret: string;
+  legacyPassword?: string;
+  encryptionVersion: "client-v1" | "legacy-server";
+  locked?: boolean;
+  decryptError?: string;
   strength: PasswordStrength;
   favorite: boolean;
   sortOrder: number;
@@ -157,4 +165,8 @@ export type AccountInput = {
   strength?: PasswordStrength;
   favorite?: boolean;
   sortOrder?: number;
+};
+
+export type AccountSecretInput = Omit<AccountInput, "password"> & {
+  passwordSecret?: string;
 };

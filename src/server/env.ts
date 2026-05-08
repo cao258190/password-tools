@@ -4,23 +4,20 @@ config();
 
 const isProduction = process.env.NODE_ENV === "production";
 const defaultJwtSecret = "dev-jwt-secret-change-me";
-const defaultCryptoSecret = "dev-crypto-secret-change-me";
 const defaultAdminPassword = "admin123456";
 const defaultUpdateCommand =
   process.env.NODE_ENV === "test" ? "node -e \"console.log('test update')\"" : "npm run web:update";
 const jwtSecret = process.env.JWT_SECRET ?? defaultJwtSecret;
-const cryptoSecret = process.env.SERVER_CRYPTO_SECRET ?? defaultCryptoSecret;
+const cryptoSecret = process.env.SERVER_CRYPTO_SECRET ?? "";
 const adminPassword = process.env.ADMIN_PASSWORD ?? defaultAdminPassword;
 
 if (isProduction) {
   const weakSecrets = [
     !process.env.JWT_SECRET || jwtSecret === defaultJwtSecret || jwtSecret.length < 32,
-    !process.env.SERVER_CRYPTO_SECRET ||
-      cryptoSecret === defaultCryptoSecret ||
-      cryptoSecret.length < 32
+    Boolean(process.env.SERVER_CRYPTO_SECRET && cryptoSecret.length < 32)
   ];
   if (weakSecrets.some(Boolean)) {
-    throw new Error("Production requires strong JWT_SECRET and SERVER_CRYPTO_SECRET values.");
+    throw new Error("Production requires a strong JWT_SECRET. SERVER_CRYPTO_SECRET is only needed for legacy migration and must be strong when set.");
   }
   if (adminPassword === defaultAdminPassword || adminPassword.length < 12) {
     throw new Error("Production requires a non-default ADMIN_PASSWORD with at least 12 characters.");

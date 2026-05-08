@@ -1,6 +1,8 @@
 import { defineStore } from "pinia";
 import { api } from "../api";
-import type { AccountInput, Category, SiteDetail, SiteInput, SiteSummary, Stats, TagSummary } from "../types";
+import type { Account, AccountInput, AccountSecretInput, Category, SiteDetail, SiteInput, SiteSummary, Stats, TagSummary } from "../types";
+import { decryptVaultText, deriveVaultKey, encryptVaultText, createVaultVerifier, isClientEncryptedSecret, verifyVaultKey } from "../utils/vaultCrypto";
+import { useAuthStore } from "./auth";
 
 export type ViewFilter = "all" | "recent" | "favorites";
 export type SiteSortMode = "sort" | "recent" | "name" | "accounts";
@@ -22,7 +24,14 @@ type VaultState = {
   error: string;
   copiedId: string;
   visiblePasswords: Record<string, boolean>;
+  vaultUnlocked: boolean;
+  vaultBusy: boolean;
+  vaultError: string;
+  vaultNotice: string;
+  legacyMigrationCount: number;
 };
+
+let activeVaultKey: CryptoKey | null = null;
 
 const emptyStats: Stats = {
   sites: 0,
@@ -77,6 +86,69 @@ async function writeClipboard(text: string) {
   return copied;
 }
 
+function requireVaultKey() {
+  if (!activeVaultKey) {
+    throw new Error("请先解锁保险库");
+  }
+  return activeVaultKey;
+}
+
+async function accountInputToSecretPayload(input: Partial<AccountInput>) {
+  const { password, ...rest } = input;
+  const payload: Partial<AccountSecretInput> = { ...rest };
+  if (password !== undefined) {
+    payload.passwordSecret = await encryptVaultText(password, requireVaultKey());
+  }
+  return payload;
+}
+
+async function hydrateAccount(account: Account): Promise<Account> {
+  if (isClientEncryptedSecret(account.passwordSecret)) {
+    if (!activeVaultKey) {
+      return {
+        ...account,
+        password: "",
+        encryptionVersion: "client-v1",
+        locked: true
+      };
+    }
+
+    try {
+      return {
+        ...account,
+        password: await decryptVaultText(account.passwordSecret, activeVaultKey),
+        encryptionVersion: "client-v1",
+        locked: false,
+        decryptError: undefined
+      };
+    } catch {
+      return {
+        ...account,
+        password: "",
+        encryptionVersion: "client-v1",
+        locked: true,
+        decryptError: "保险库主密码不正确或密文已损坏"
+      };
+    }
+  }
+
+  const legacyPassword = account.legacyPassword ?? account.password;
+  return {
+    ...account,
+    password: legacyPassword ?? "",
+    legacyPassword,
+    encryptionVersion: "legacy-server",
+    locked: !legacyPassword
+  };
+}
+
+async function hydrateSite(site: SiteDetail): Promise<SiteDetail> {
+  return {
+    ...site,
+    accounts: await Promise.all(site.accounts.map((account) => hydrateAccount(account)))
+  };
+}
+
 export const useVaultStore = defineStore("vault", {
   state: (): VaultState => ({
     sites: [],
@@ -94,7 +166,12 @@ export const useVaultStore = defineStore("vault", {
     detailLoading: false,
     error: "",
     copiedId: "",
-    visiblePasswords: {}
+    visiblePasswords: {},
+    vaultUnlocked: false,
+    vaultBusy: false,
+    vaultError: "",
+    vaultNotice: "",
+    legacyMigrationCount: 0
   }),
   getters: {
     activeCategoryName(state) {
@@ -156,7 +233,7 @@ export const useVaultStore = defineStore("vault", {
       this.error = "";
       try {
         const { site } = await api.site(id);
-        this.selectedSite = site;
+        this.selectedSite = await hydrateSite(site);
       } catch (error) {
         this.error = error instanceof Error ? error.message : "加载详情失败";
       } finally {
@@ -206,7 +283,7 @@ export const useVaultStore = defineStore("vault", {
     },
     async updateSite(id: string, input: Partial<SiteInput>) {
       const { site } = await api.updateSite(id, input);
-      this.selectedSite = site;
+      this.selectedSite = await hydrateSite(site);
       await this.loadShellData();
       await this.loadSites(false);
       if (!this.sites.some((visibleSite) => visibleSite.id === this.selectedSiteId)) {
@@ -227,13 +304,13 @@ export const useVaultStore = defineStore("vault", {
       await this.loadSites();
     },
     async createAccount(siteId: string, input: AccountInput) {
-      await api.createAccount(siteId, input);
+      await api.createAccount(siteId, (await accountInputToSecretPayload(input)) as AccountSecretInput);
       await this.loadShellData();
       await this.loadSites(false);
       await this.selectSite(siteId);
     },
     async updateAccount(accountId: string, input: Partial<AccountInput>) {
-      await api.updateAccount(accountId, input);
+      await api.updateAccount(accountId, await accountInputToSecretPayload(input));
       await this.loadShellData();
       await this.loadSites(false);
       if (this.selectedSiteId) await this.selectSite(this.selectedSiteId);
@@ -256,6 +333,86 @@ export const useVaultStore = defineStore("vault", {
     },
     togglePassword(id: string) {
       this.visiblePasswords[id] = !this.visiblePasswords[id];
+    },
+    lockVault() {
+      activeVaultKey = null;
+      this.vaultUnlocked = false;
+      this.visiblePasswords = {};
+      if (this.selectedSite) {
+        this.selectedSite = {
+          ...this.selectedSite,
+          accounts: this.selectedSite.accounts.map((account) => ({
+            ...account,
+            password: "",
+            locked: true
+          }))
+        };
+      }
+    },
+    async unlockVault(masterPassword: string) {
+      const auth = useAuthStore();
+      if (!auth.user) {
+        throw new Error("请先登录");
+      }
+
+      this.vaultBusy = true;
+      this.vaultError = "";
+      this.vaultNotice = "";
+      this.legacyMigrationCount = 0;
+
+      try {
+        const key = await deriveVaultKey(masterPassword, auth.user.cryptoSalt, auth.user.vaultKdfIterations);
+        if (auth.user.vaultVerifier) {
+          const verified = await verifyVaultKey(auth.user.vaultVerifier, key);
+          if (!verified) {
+            throw new Error("保险库主密码不正确");
+          }
+        } else {
+          const vaultVerifier = await createVaultVerifier(key);
+          const { user } = await api.updateVault({ vaultVerifier });
+          auth.user = user;
+        }
+
+        activeVaultKey = key;
+        this.vaultUnlocked = true;
+        await this.migrateLegacyAccounts();
+        if (this.selectedSiteId) await this.selectSite(this.selectedSiteId);
+      } catch (error) {
+        activeVaultKey = null;
+        this.vaultUnlocked = false;
+        this.vaultError = error instanceof Error ? error.message : "保险库解锁失败";
+        throw error;
+      } finally {
+        this.vaultBusy = false;
+      }
+    },
+    async migrateLegacyAccounts() {
+      if (!activeVaultKey) return;
+
+      const { sites } = await api.sites({ scope: "all", sort: "sort" });
+      let migrated = 0;
+
+      for (const siteSummary of sites) {
+        const { site } = await api.site(siteSummary.id);
+        for (const account of site.accounts) {
+          const legacyPassword = account.legacyPassword ?? (
+            isClientEncryptedSecret(account.passwordSecret) ? "" : account.password
+          );
+          if (!legacyPassword || isClientEncryptedSecret(account.passwordSecret)) continue;
+
+          await api.updateAccount(account.id, {
+            passwordSecret: await encryptVaultText(legacyPassword, activeVaultKey)
+          });
+          migrated += 1;
+        }
+      }
+
+      if (migrated > 0) {
+        this.legacyMigrationCount = migrated;
+        this.vaultNotice = `已将 ${migrated} 个旧账号密码迁移为客户端加密`;
+        await this.loadShellData();
+        await this.loadSites(false);
+      }
     }
   }
 });

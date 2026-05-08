@@ -5,17 +5,23 @@ import { prisma } from "../db.js";
 import { HttpError, asyncHandler } from "../http.js";
 import { requireAuth } from "../middleware/auth.js";
 import { resolveFavicons } from "../services/favicon.js";
-import { decryptSecret, encryptSecret } from "../utils/crypto.js";
+import { decryptSecret } from "../utils/crypto.js";
 import { parseStringArray, stringifyStringArray } from "../utils/json.js";
-import { evaluateStrength } from "../utils/password.js";
 import { colorSchema } from "../utils/validation.js";
+import { isClientEncryptedSecret } from "../utils/vaultSecret.js";
 
 export const sitesRouter = Router();
+
+const passwordSecretSchema = z
+  .string()
+  .min(1)
+  .max(4096)
+  .refine(isClientEncryptedSecret, "账号密码必须先在客户端加密");
 
 const accountCreateSchema = z.object({
   label: z.string().trim().min(1).max(40),
   username: z.string().trim().min(1).max(120),
-  password: z.string().min(1).max(256),
+  passwordSecret: passwordSecretSchema,
   strength: z.enum(["weak", "medium", "strong"]).optional(),
   favorite: z.boolean().optional(),
   sortOrder: z.coerce.number().int().min(-999999).max(999999).default(0)
@@ -62,6 +68,38 @@ type SiteWithRelations = Site & {
   accounts: Account[];
 };
 
+function serializeAccount(account: Account, userSalt: string) {
+  const clientEncrypted = isClientEncryptedSecret(account.passwordSecret);
+  let legacyPassword: string | undefined;
+  let decryptError: string | undefined;
+
+  if (!clientEncrypted) {
+    try {
+      legacyPassword = decryptSecret(account.passwordSecret, userSalt);
+    } catch {
+      decryptError = "旧账号密码无法用当前服务器密钥解密";
+    }
+  }
+
+  return {
+    id: account.id,
+    siteId: account.siteId,
+    label: account.label,
+    username: account.username,
+    password: legacyPassword ?? "",
+    passwordSecret: account.passwordSecret,
+    legacyPassword,
+    encryptionVersion: clientEncrypted ? "client-v1" : "legacy-server",
+    decryptError,
+    strength: account.strength,
+    favorite: account.favorite,
+    sortOrder: account.sortOrder,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+    lastUsedAt: account.lastUsedAt
+  };
+}
+
 function serializeSite(site: SiteWithRelations, userSalt?: string) {
   return {
     id: site.id,
@@ -84,19 +122,7 @@ function serializeSite(site: SiteWithRelations, userSalt?: string) {
     updatedAt: site.updatedAt,
     lastUsedAt: site.lastUsedAt,
     accounts: userSalt
-      ? site.accounts.map((account) => ({
-          id: account.id,
-          siteId: account.siteId,
-          label: account.label,
-          username: account.username,
-          password: decryptSecret(account.passwordSecret, userSalt),
-          strength: account.strength,
-          favorite: account.favorite,
-          sortOrder: account.sortOrder,
-          createdAt: account.createdAt,
-          updatedAt: account.updatedAt,
-          lastUsedAt: account.lastUsedAt
-        }))
+      ? site.accounts.map((account) => serializeAccount(account, userSalt))
       : undefined
   };
 }
@@ -197,8 +223,8 @@ sitesRouter.post(
             userId: user.id,
             label: account.label,
             username: account.username,
-            passwordSecret: encryptSecret(account.password, user.cryptoSalt),
-            strength: account.strength ?? evaluateStrength(account.password),
+            passwordSecret: account.passwordSecret,
+            strength: account.strength ?? "weak",
             favorite: account.favorite ?? false,
             sortOrder: account.sortOrder
           }))
@@ -329,8 +355,8 @@ sitesRouter.post(
         siteId: site.id,
         label: input.label,
         username: input.username,
-        passwordSecret: encryptSecret(input.password, user.cryptoSalt),
-        strength: input.strength ?? evaluateStrength(input.password),
+        passwordSecret: input.passwordSecret,
+        strength: input.strength ?? "weak",
         favorite: input.favorite ?? false,
         sortOrder: input.sortOrder
       }
@@ -347,7 +373,9 @@ sitesRouter.post(
         siteId: account.siteId,
         label: account.label,
         username: account.username,
-        password: input.password,
+        password: "",
+        passwordSecret: account.passwordSecret,
+        encryptionVersion: "client-v1",
         strength: account.strength,
         favorite: account.favorite,
         sortOrder: account.sortOrder,

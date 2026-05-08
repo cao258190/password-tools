@@ -1,6 +1,7 @@
 import type {
   Account,
   AccountInput,
+  AccountSecretInput,
   AdminSettings,
   BackupImportResult,
   Category,
@@ -86,6 +87,9 @@ export const api = {
   changePassword(input: { currentPassword: string; newPassword: string }) {
     return request<void>("/api/auth/password", withBody("PATCH", input));
   },
+  updateVault(input: { vaultVerifier: string }) {
+    return request<{ user: User }>("/api/auth/vault", withBody("PATCH", input));
+  },
   adminSettings() {
     return request<{ settings: AdminSettings }>("/api/admin/settings");
   },
@@ -149,7 +153,7 @@ export const api = {
       icons: { iconUrl: string; sourceUrl: string; contentType: string }[];
     }>(`/api/sites/favicon?${query.toString()}`);
   },
-  createSite(input: SiteInput & { accounts?: AccountInput[] }) {
+  createSite(input: SiteInput & { accounts?: AccountSecretInput[] }) {
     return request<{ site: SiteDetail }>("/api/sites", withBody("POST", input));
   },
   updateSite(id: string, input: Partial<SiteInput>) {
@@ -158,10 +162,10 @@ export const api = {
   deleteSite(id: string) {
     return request<void>(`/api/sites/${id}`, withBody("DELETE"));
   },
-  createAccount(siteId: string, input: AccountInput) {
+  createAccount(siteId: string, input: AccountSecretInput) {
     return request<{ account: Account }>(`/api/sites/${siteId}/accounts`, withBody("POST", input));
   },
-  updateAccount(id: string, input: Partial<AccountInput>) {
+  updateAccount(id: string, input: Partial<AccountSecretInput>) {
     return request<{ account: Account }>(`/api/accounts/${id}`, withBody("PATCH", input));
   },
   deleteAccount(id: string) {

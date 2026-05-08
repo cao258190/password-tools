@@ -10,7 +10,7 @@
 - 账号管理：多账号、密码显示/隐藏、复制、生成、强度展示、删除确认
 - 搜索筛选：按网站名、账号、标签、备注搜索，支持分类和收藏筛选
 - 全局固定分类：所有用户共用同一套分类字典，网站和账号数据按用户隔离
-- 安全处理：用户密码使用 `bcryptjs` 哈希；账号密码使用服务端密钥派生后 `AES-256-GCM` 加密存储
+- 安全处理：用户密码使用 `bcryptjs` 哈希；账号密码在客户端用保险库主密码派生密钥后 `AES-GCM` 加密，服务器只保存密文
 - 请求防护：写操作使用 CSRF 双提交校验，登录和注册接口有基础限流，服务端返回安全响应头
 - 版本更新：管理员可在设置中检测 GitHub 最新版本，并在服务器开启后通过 Web 触发预配置更新命令
 - Docker 一键部署：前端端口 `3910`，后端端口 `2697`
@@ -91,7 +91,7 @@ npm run db:push
 npm run db:reset
 ```
 
-演示账号来自 `prisma/seed.ts` 和 `src/server/services/demoData.ts`。SQLite 文件默认位于 `prisma/dev.db`，已被 `.gitignore` 排除。
+演示账号来自 `prisma/seed.ts` 和 `src/server/services/demoData.ts`。演示账号的登录密码和保险库主密码均为 `demo123456`。SQLite 文件默认位于 `prisma/dev.db`，已被 `.gitignore` 排除。
 
 ## 常用脚本
 
@@ -129,6 +129,7 @@ chmod +x deploy.sh
 - `GET /api/auth/me`：当前用户
 - `PATCH /api/auth/profile`：修改个人信息
 - `PATCH /api/auth/password`：修改密码
+- `PATCH /api/auth/vault`：保存客户端生成的保险库校验密文
 - `GET /api/public/settings`：公开系统设置
 - `GET /api/admin/settings`：管理员设置
 - `PATCH /api/admin/settings`：修改管理员设置
@@ -152,17 +153,19 @@ chmod +x deploy.sh
 
 ## 安全说明
 
-这是一个本地可运行的完整原型，不等同于经过安全审计的生产级密码管理器。当前采用服务端托管加密模式：服务端会在认证通过后解密账号密码并返回给当前用户。若需要“服务端永不接触明文”的零知识架构，需要改为前端 Web Crypto 加解密，并重新设计密钥恢复与多设备同步方案。
+这是一个本地可运行的完整原型，不等同于经过安全审计的生产级密码管理器。当前账号密码采用客户端加密：保险库主密码不上传服务器，浏览器用 Web Crypto 派生密钥并加解密账号密码，服务端只保存账号密文和用于校验主密码的密文。旧版服务端密文会在用户第一次设置保险库主密码后由客户端重加密迁移。
+
+注意：Web 版客户端加密主要降低数据库或服务器备份泄露风险。仍需严格防 XSS，并确保部署链路可信，因为恶意前端代码可以窃取用户输入。
 
 部署到公网前请务必：
 
-- 修改 `JWT_SECRET` 和 `SERVER_CRYPTO_SECRET`
+- 修改 `JWT_SECRET`
 - 修改 `ADMIN_EMAIL` 和 `ADMIN_PASSWORD`，首次登录后尽快修改管理员密码
 - 使用 HTTPS，并在 HTTPS 环境设置 `COOKIE_SECURE=true`
 - 妥善备份 SQLite volume
 - 限制服务器访问权限并定期更新镜像
 - Web 在线更新默认开启；Docker 部署由独立 updater 服务挂载 Docker socket 并重建 compose 服务，不需要时请设置 `WEB_UPDATE_ENABLED=false`
 
-生产环境启动时会检查 `JWT_SECRET`、`SERVER_CRYPTO_SECRET` 和 `ADMIN_PASSWORD`，如果仍是默认值或长度过短会拒绝启动。
+生产环境启动时会检查 `JWT_SECRET` 和 `ADMIN_PASSWORD`，如果仍是默认值或长度过短会拒绝启动。`SERVER_CRYPTO_SECRET` 只用于迁移旧版服务端密文；如果设置了该变量，也必须使用足够长的随机值。
 
-管理员导出的系统备份包含用户密码哈希、账号密文字段和分类/网站/账号数据，不包含账号明文密码。账号密文依赖当前服务器的 `SERVER_CRYPTO_SECRET`，迁移或恢复到其他服务器时必须使用同一个 `SERVER_CRYPTO_SECRET`，否则账号密码无法解密。
+管理员导出的系统备份包含用户密码哈希、保险库校验密文、账号密文字段和分类/网站/账号数据，不包含账号明文密码。客户端加密后的账号密文不依赖服务器密钥；如果备份中仍含旧版服务端密文，导出元数据会标记需要原 `SERVER_CRYPTO_SECRET` 才能迁移。

@@ -20,7 +20,9 @@ chmod +x deploy.sh
 
 ## 环境变量
 
-首次执行 `deploy.sh` 会自动生成 `.env.docker`，包含随机 `JWT_SECRET`、`SERVER_CRYPTO_SECRET` 与 `ADMIN_PASSWORD`。脚本会在终端输出默认管理员邮箱和密码，请妥善保存。
+首次执行 `deploy.sh` 会自动生成 `.env.docker`，包含随机 `JWT_SECRET`、旧密文迁移用的 `SERVER_CRYPTO_SECRET` 与 `ADMIN_PASSWORD`。脚本会在终端输出默认管理员邮箱和密码，请妥善保存。
+
+新账号密码使用客户端保险库主密码加密，服务器不保存账号密码解密密钥。`SERVER_CRYPTO_SECRET` 只用于从旧版服务端密文迁移；完成迁移后可以留空。
 
 如果部署在域名或 HTTPS 后面，请修改 `.env.docker`：
 

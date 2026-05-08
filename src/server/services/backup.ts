@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { HttpError } from "../http.js";
+import { isClientEncryptedSecret } from "../utils/vaultSecret.js";
 
 const dateSchema = z.string().transform((value, context) => {
   const date = new Date(value);
@@ -23,6 +24,8 @@ const userBackupSchema = z.object({
   name: z.string().nullable(),
   passwordHash: z.string().min(1),
   cryptoSalt: z.string().min(1),
+  vaultVerifier: z.string().nullable().default(null),
+  vaultKdfIterations: z.number().int().min(1).default(310000),
   isAdmin: z.boolean(),
   tokenVersion: z.number().int().min(0).default(0),
   createdAt: dateSchema,
@@ -88,8 +91,8 @@ const backupSchema = z.object({
   appVersion: z.string().optional(),
   exportedAt: dateSchema,
   encryption: z.object({
-    mode: z.literal("server-aes-256-gcm"),
-    requiresSameServerCryptoSecret: z.literal(true)
+    mode: z.enum(["client-pbkdf2-aes-256-gcm", "mixed-client-and-server", "server-aes-256-gcm"]),
+    requiresSameServerCryptoSecret: z.boolean()
   }),
   tables: z.object({
     users: z.array(userBackupSchema),
@@ -173,6 +176,7 @@ export async function exportSystemBackup() {
     prisma.site.findMany({ orderBy: { id: "asc" } }),
     prisma.account.findMany({ orderBy: { id: "asc" } })
   ]);
+  const hasLegacyAccounts = accounts.some((account) => !isClientEncryptedSecret(account.passwordSecret));
 
   return {
     kind: "password-tools-backup",
@@ -180,8 +184,8 @@ export async function exportSystemBackup() {
     appVersion: env.appVersion,
     exportedAt: new Date().toISOString(),
     encryption: {
-      mode: "server-aes-256-gcm",
-      requiresSameServerCryptoSecret: true
+      mode: hasLegacyAccounts ? "mixed-client-and-server" : "client-pbkdf2-aes-256-gcm",
+      requiresSameServerCryptoSecret: hasLegacyAccounts
     },
     tables: {
       users: users.map((user) => ({

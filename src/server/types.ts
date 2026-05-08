@@ -3,6 +3,8 @@ export type AuthUser = {
   email: string;
   name: string | null;
   cryptoSalt: string;
+  vaultVerifier: string | null;
+  vaultKdfIterations: number;
   isAdmin: boolean;
   tokenVersion: number;
 };

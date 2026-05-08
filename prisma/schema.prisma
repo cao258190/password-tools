@@ -13,6 +13,8 @@ model User {
   name         String?
   passwordHash String
   cryptoSalt   String
+  vaultVerifier String?
+  vaultKdfIterations Int @default(310000)
   isAdmin      Boolean    @default(false)
   tokenVersion Int        @default(0)
   createdAt    DateTime   @default(now())

@@ -52,6 +52,7 @@ const sortedAccounts = computed(() => {
 });
 
 async function copyValue(value: string, id: string) {
+  if (!value) return;
   const copied = await vault.copy(value, id);
   emit("copied", copied ? "复制成功" : "复制失败，请手动复制");
 }
@@ -63,7 +64,7 @@ async function copyValue(value: string, id: string) {
       <div>
         <h2>账号列表（{{ site?.accounts.length ?? 0 }}）</h2>
       </div>
-      <button class="primary compact" type="button" :disabled="!site" @click="emit('add')">
+      <button class="primary compact" type="button" :disabled="!site || !vault.vaultUnlocked" @click="emit('add')">
         <Plus :size="16" />
         添加账号
       </button>
@@ -100,7 +101,7 @@ async function copyValue(value: string, id: string) {
         <div class="account-card-head">
           <span class="account-badge">{{ account.label }}</span>
           <div>
-            <button class="icon-button small" type="button" title="编辑" @click="emit('edit', account)">
+            <button class="icon-button small" type="button" title="编辑" :disabled="account.locked" @click="emit('edit', account)">
               <Pencil :size="14" />
             </button>
             <button class="icon-button small" type="button" title="删除" @click="emit('delete', account)">
@@ -125,17 +126,17 @@ async function copyValue(value: string, id: string) {
         <label>
           密码
           <div class="secret-line">
-            <span class="secret-value password-text">{{ vault.visiblePasswords[account.id] ? account.password : "••••••••••••••••" }}</span>
+            <span class="secret-value password-text">{{ account.decryptError ? "解密失败" : account.locked ? "需要解锁" : vault.visiblePasswords[account.id] ? account.password : "••••••••••••••••" }}</span>
             <span class="secret-actions">
-              <button class="icon-button small" type="button" title="显示密码" @click="vault.togglePassword(account.id)">
+              <button class="icon-button small" type="button" title="显示密码" :disabled="account.locked" @click="vault.togglePassword(account.id)">
                 <EyeOff v-if="vault.visiblePasswords[account.id]" :size="14" />
                 <Eye v-else :size="14" />
               </button>
-              <button class="icon-button small" type="button" title="复制密码" @click="void copyValue(account.password, `pass-${account.id}`)">
+              <button class="icon-button small" type="button" title="复制密码" :disabled="account.locked" @click="void copyValue(account.password, `pass-${account.id}`)">
                 <Copy v-if="vault.copiedId !== `pass-${account.id}`" :size="14" />
                 <span v-else class="copy-done">✓</span>
               </button>
-              <button class="icon-button small" type="button" title="生成新密码" @click="emit('generate', account)">
+              <button class="icon-button small" type="button" title="生成新密码" :disabled="account.locked" @click="emit('generate', account)">
                 <RefreshCw :size="14" />
               </button>
             </span>

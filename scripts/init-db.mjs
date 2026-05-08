@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS "User" (
   "name" TEXT,
   "passwordHash" TEXT NOT NULL,
   "cryptoSalt" TEXT NOT NULL,
+  "vaultVerifier" TEXT,
+  "vaultKdfIterations" INTEGER NOT NULL DEFAULT 310000,
   "isAdmin" BOOLEAN NOT NULL DEFAULT false,
   "tokenVersion" INTEGER NOT NULL DEFAULT 0,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -126,6 +128,12 @@ if (!userColumns.includes("isAdmin")) {
 }
 if (!userColumns.includes("tokenVersion")) {
   db.exec(`ALTER TABLE "User" ADD COLUMN "tokenVersion" INTEGER NOT NULL DEFAULT 0;`);
+}
+if (!userColumns.includes("vaultVerifier")) {
+  db.exec(`ALTER TABLE "User" ADD COLUMN "vaultVerifier" TEXT;`);
+}
+if (!userColumns.includes("vaultKdfIterations")) {
+  db.exec(`ALTER TABLE "User" ADD COLUMN "vaultKdfIterations" INTEGER NOT NULL DEFAULT 310000;`);
 }
 
 const siteColumns = db
@@ -276,8 +284,8 @@ const existingAdmin = db
   .get(adminEmail);
 if (!existingAdmin) {
   db.prepare(`
-INSERT INTO "User" ("id", "email", "name", "passwordHash", "cryptoSalt", "isAdmin", "createdAt", "updatedAt")
-VALUES (?, ?, ?, ?, ?, true, ?, ?)
+INSERT INTO "User" ("id", "email", "name", "passwordHash", "cryptoSalt", "vaultKdfIterations", "isAdmin", "createdAt", "updatedAt")
+VALUES (?, ?, ?, ?, ?, 310000, true, ?, ?)
 `).run(
     `admin-${randomBytes(8).toString("hex")}`,
     adminEmail,

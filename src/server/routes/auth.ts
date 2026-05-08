@@ -26,6 +26,21 @@ const passwordSchema = z.object({
   newPassword: z.string().min(8, "新密码至少 8 位")
 });
 
+const vaultSchema = z.object({
+  vaultVerifier: z.string().min(1, "请设置保险库主密码")
+});
+
+const userSelect = {
+  id: true,
+  email: true,
+  name: true,
+  cryptoSalt: true,
+  vaultVerifier: true,
+  vaultKdfIterations: true,
+  isAdmin: true,
+  tokenVersion: true
+} as const;
+
 authRouter.post(
   "/register",
   rateLimit({
@@ -53,7 +68,7 @@ authRouter.post(
         passwordHash: await bcrypt.hash(input.password, 12),
         cryptoSalt: createUserSalt()
       },
-      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true, tokenVersion: true }
+      select: userSelect
     });
 
     setAuthCookie(res, user.id, user.tokenVersion);
@@ -83,6 +98,8 @@ authRouter.post(
         email: user.email,
         name: user.name,
         cryptoSalt: user.cryptoSalt,
+        vaultVerifier: user.vaultVerifier,
+        vaultKdfIterations: user.vaultKdfIterations,
         isAdmin: user.isAdmin,
         tokenVersion: user.tokenVersion
       })
@@ -124,7 +141,30 @@ authRouter.patch(
         email: input.email,
         name: input.name || null
       },
-      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true, tokenVersion: true }
+      select: userSelect
+    });
+
+    res.json({ user: publicUser(user) });
+  })
+);
+
+authRouter.patch(
+  "/vault",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const input = vaultSchema.parse(req.body);
+    const existing = await prisma.user.findUnique({
+      where: { id: req.authUser!.id },
+      select: { vaultVerifier: true }
+    });
+    if (existing?.vaultVerifier) {
+      throw new HttpError(409, "保险库主密码已设置");
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.authUser!.id },
+      data: { vaultVerifier: input.vaultVerifier },
+      select: userSelect
     });
 
     res.json({ user: publicUser(user) });

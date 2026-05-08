@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { FileText, FolderTree, ListChecks, UsersRound } from "lucide-vue-next";
+import { FileText, FolderTree, ListChecks, LockKeyhole, UsersRound } from "lucide-vue-next";
 import AccountModal from "../components/AccountModal.vue";
 import AccountPanel from "../components/AccountPanel.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
@@ -11,6 +11,7 @@ import SiteDetail from "../components/SiteDetail.vue";
 import SiteList from "../components/SiteList.vue";
 import SiteModal from "../components/SiteModal.vue";
 import TopBar from "../components/TopBar.vue";
+import VaultUnlockModal from "../components/VaultUnlockModal.vue";
 import { useAuthStore } from "../stores/auth";
 import { useVaultStore } from "../stores/vault";
 import type { Account, AccountInput, SiteDetail as SiteDetailType, SiteInput } from "../types";
@@ -31,11 +32,15 @@ const modalError = ref("");
 const toast = ref("");
 const settingsOpen = ref(false);
 const profileOpen = ref(false);
+const unlockOpen = ref(false);
 const mobileView = ref<"filters" | "sites" | "detail" | "accounts">("sites");
 let toastTimer = 0;
 
-onMounted(() => {
-  void vault.loadAll();
+onMounted(async () => {
+  await vault.loadAll();
+  if (!vault.vaultUnlocked) {
+    unlockOpen.value = true;
+  }
 });
 
 function openCreateSite() {
@@ -55,6 +60,7 @@ function openEditSite(site: SiteDetailType) {
 }
 
 function openCreateAccount() {
+  if (!ensureVaultUnlocked()) return;
   editingAccount.value = null;
   modalError.value = "";
   accountModalMode.value = "create";
@@ -66,6 +72,7 @@ function handleSiteSelected() {
 }
 
 function openEditAccount(account: Account) {
+  if (!ensureVaultUnlocked()) return;
   editingAccount.value = account;
   modalError.value = "";
   accountModalMode.value = "edit";
@@ -73,6 +80,7 @@ function openEditAccount(account: Account) {
 }
 
 function openGenerateAccount(account: Account) {
+  if (!ensureVaultUnlocked()) return;
   editingAccount.value = account;
   modalError.value = "";
   accountModalMode.value = "generate";
@@ -95,6 +103,7 @@ async function saveSite(payload: SiteInput) {
 
 async function persistAccount(payload: AccountInput) {
   if (!vault.selectedSiteId) return;
+  if (!ensureVaultUnlocked()) return;
   modalError.value = "";
   try {
     if (editingAccount.value) {
@@ -157,8 +166,26 @@ async function confirmRemoveBackupUrl() {
 
 async function confirmLogout() {
   logoutConfirmOpen.value = false;
+  vault.lockVault();
   await auth.logout();
   window.location.assign("/login");
+}
+
+function ensureVaultUnlocked() {
+  if (vault.vaultUnlocked) return true;
+  unlockOpen.value = true;
+  modalError.value = "请先解锁保险库";
+  return false;
+}
+
+async function unlockVault(masterPassword: string) {
+  try {
+    await vault.unlockVault(masterPassword);
+    unlockOpen.value = false;
+    showToast(vault.vaultNotice || "保险库已解锁");
+  } catch {
+    // 错误由 store 传给解锁弹窗。
+  }
 }
 
 function showToast(message: string) {
@@ -221,6 +248,11 @@ function showToast(message: string) {
 
     <p v-if="modalError" class="floating-error">{{ modalError }}</p>
     <p v-if="toast" class="floating-toast">{{ toast }}</p>
+    <div v-if="!vault.vaultUnlocked" class="vault-lock-banner">
+      <LockKeyhole :size="17" />
+      <span>账号密码已锁定</span>
+      <button class="link-button" type="button" @click="unlockOpen = true">解锁</button>
+    </div>
 
     <SiteModal
       :open="siteModalOpen"
@@ -283,5 +315,14 @@ function showToast(message: string) {
 
     <SettingsPanel :open="settingsOpen" @close="settingsOpen = false" />
     <ProfileModal :open="profileOpen" @close="profileOpen = false" @notice="showToast" />
+    <VaultUnlockModal
+      :open="unlockOpen"
+      :setup-mode="!auth.user?.vaultVerifier"
+      :busy="vault.vaultBusy"
+      :error="vault.vaultError"
+      :notice="vault.vaultNotice"
+      @close="unlockOpen = false"
+      @submit="unlockVault"
+    />
   </div>
 </template>

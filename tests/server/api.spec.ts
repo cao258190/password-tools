@@ -1,4 +1,5 @@
 import request from "supertest";
+import { Buffer } from "node:buffer";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import { prisma } from "../../src/server/db";
@@ -7,6 +8,10 @@ import { defaultCategories } from "../../src/server/services/defaults";
 
 const app = createApp();
 const csrfHeader = "X-CSRF-Token";
+
+function clientSecret(label: string) {
+  return `vault:v1:${Buffer.from(`iv-${label}`).toString("base64url")}:${Buffer.from(`cipher-${label}`).toString("base64url")}`;
+}
 
 async function clearDatabase() {
   await prisma.account.deleteMany();
@@ -66,6 +71,23 @@ describe("password vault API", () => {
     const response = await agent.get("/api/auth/me").expect(200);
     expect(response.body.user.email).toBe("user@example.com");
     expect(response.body.user.isAdmin).toBe(false);
+    expect(response.body.user.cryptoSalt).toBeTruthy();
+    expect(response.body.user.vaultVerifier).toBeNull();
+
+    const token = await csrfToken(agent);
+    const verifier = clientSecret("verifier");
+    const updated = await agent
+      .patch("/api/auth/vault")
+      .set(csrfHeader, token)
+      .send({ vaultVerifier: verifier })
+      .expect(200);
+    expect(updated.body.user.vaultVerifier).toBe(verifier);
+
+    await agent
+      .patch("/api/auth/vault")
+      .set(csrfHeader, token)
+      .send({ vaultVerifier: clientSecret("second-verifier") })
+      .expect(409);
   });
 
   it("creates a default admin and lets only admins control registration", async () => {
@@ -187,7 +209,7 @@ describe("password vault API", () => {
           {
             label: "备份账号",
             username: "backup@example.com",
-            password: "ExportPass#2026"
+            passwordSecret: clientSecret("export")
           }
         ]
       })
@@ -196,7 +218,8 @@ describe("password vault API", () => {
     const exported = await admin.get("/api/admin/backup/export").expect(200);
     const backup = exported.body.backup;
     expect(backup.kind).toBe("password-tools-backup");
-    expect(backup.encryption.requiresSameServerCryptoSecret).toBe(true);
+    expect(backup.encryption.mode).toBe("client-pbkdf2-aes-256-gcm");
+    expect(backup.encryption.requiresSameServerCryptoSecret).toBe(false);
     expect(JSON.stringify(backup)).not.toContain("ExportPass#2026");
     expect(backup.tables.accounts[0].passwordSecret).toBeTruthy();
 
@@ -213,7 +236,8 @@ describe("password vault API", () => {
     expect(imported.body.result.sites).toBeGreaterThan(0);
     const detail = await admin.get(`/api/sites/${created.body.site.id}`).expect(200);
     expect(detail.body.site.name).toBe("Backup Site");
-    expect(detail.body.site.accounts[0].password).toBe("ExportPass#2026");
+    expect(detail.body.site.accounts[0].password).toBe("");
+    expect(detail.body.site.accounts[0].passwordSecret).toBe(backup.tables.accounts[0].passwordSecret);
   });
 
   it("rejects invalid or unsafe backup imports", async () => {
@@ -231,7 +255,7 @@ describe("password vault API", () => {
           {
             label: "备份账号",
             username: "unsafe-backup@example.com",
-            password: "UnsafeBackup#2026"
+            passwordSecret: clientSecret("unsafe-backup")
           }
         ]
       })
@@ -423,7 +447,7 @@ describe("password vault API", () => {
     await secondSession.get("/api/auth/me").expect(401);
   });
 
-  it("creates sites with encrypted account passwords and decrypts for the owner", async () => {
+  it("creates sites with client-encrypted account passwords", async () => {
     const agent = await registerAgent("owner@example.com");
     const token = await csrfToken(agent);
     const categories = await agent.get("/api/categories").expect(200);
@@ -448,7 +472,7 @@ describe("password vault API", () => {
           {
             label: "主账号",
             username: "owner@example.com",
-            password: "PlainPass#2026"
+            passwordSecret: clientSecret("owner")
           }
         ]
       })
@@ -461,7 +485,8 @@ describe("password vault API", () => {
     expect(rawAccount.passwordSecret).not.toContain("PlainPass#2026");
 
     const detail = await agent.get(`/api/sites/${siteId}`).expect(200);
-    expect(detail.body.site.accounts[0].password).toBe("PlainPass#2026");
+    expect(detail.body.site.accounts[0].password).toBe("");
+    expect(detail.body.site.accounts[0].passwordSecret).toBe(rawAccount.passwordSecret);
     expect(detail.body.site.iconColor).toBe("#111827");
     expect(detail.body.site.accountCount).toBe(1);
   });
@@ -570,7 +595,7 @@ describe("password vault API", () => {
           {
             label: "主账号",
             username: "before@example.com",
-            password: "BeforePass#2026"
+            passwordSecret: clientSecret("before")
           }
         ]
       })
@@ -584,12 +609,12 @@ describe("password vault API", () => {
     const updated = await agent
       .patch(`/api/accounts/${accountId}`)
       .set(csrfHeader, token)
-      .send({ username: "after@example.com", password: "AfterPass#2026" })
+      .send({ username: "after@example.com", passwordSecret: clientSecret("after") })
       .expect(200);
 
     expect(updated.body.account.username).toBe("after@example.com");
-    expect(updated.body.account.password).toBe("AfterPass#2026");
-    expect(updated.body.account.passwordSecret).toBeUndefined();
+    expect(updated.body.account.password).toBe("");
+    expect(updated.body.account.passwordSecret).toBe(clientSecret("after"));
     expect(updated.body.account.userId).toBeUndefined();
 
     const rawSite = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
@@ -692,7 +717,7 @@ describe("password vault API", () => {
           {
             label: "机器人",
             username: "company-bot",
-            password: "BotPass#2026"
+            passwordSecret: clientSecret("bot")
           }
         ]
       })
@@ -735,13 +760,13 @@ describe("password vault API", () => {
           {
             label: "低排序账号",
             username: "low-account@example.com",
-            password: "PlainPass#2026",
+            passwordSecret: clientSecret("low-sort"),
             sortOrder: 1
           },
           {
             label: "高排序账号",
             username: "high-account@example.com",
-            password: "PlainPass#2026",
+            passwordSecret: clientSecret("high-sort"),
             sortOrder: 20
           }
         ]

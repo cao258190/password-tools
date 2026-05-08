@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
           <ShieldCheck :size="18" />
           <h3>安全状态</h3>
         </div>
-        <p>登录密码使用 bcrypt 哈希保存，账号密码使用 AES-256-GCM 加密存储。</p>
+        <p>登录密码使用 bcrypt 哈希保存，账号密码在浏览器内用保险库主密码加密。</p>
         <div class="settings-kpis">
           <span>
             <strong>{{ vault.stats.sites }}</strong>
@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
           <h3>数据备份</h3>
         </div>
         <div class="backup-card">
-          <p>导出文件包含全系统用户、分类、网站和账号密文数据。恢复到其他服务器时需要保持相同 SERVER_CRYPTO_SECRET。</p>
+          <p>导出文件包含全系统用户、分类、网站和账号密文数据。客户端加密账号不依赖服务器密钥。</p>
           <div class="backup-actions">
             <button class="secondary" type="button" :disabled="backupExporting" @click="exportBackup">
               <DownloadCloud :class="{ spin: backupExporting }" :size="16" />

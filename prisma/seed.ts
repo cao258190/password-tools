@@ -1,10 +1,34 @@
 import bcrypt from "bcryptjs";
+import { createCipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { prisma } from "../src/server/db";
 import { demoSites, demoUser } from "../src/server/services/demoData";
 import { setRegistrationEnabled } from "../src/server/services/bootstrap";
 import { ensureDefaultCategories } from "../src/server/services/defaults";
-import { createUserSalt, encryptSecret } from "../src/server/utils/crypto";
+import { createUserSalt } from "../src/server/utils/crypto";
 import { evaluateStrength } from "../src/server/utils/password";
+
+const clientSecretPrefix = "vault:v1";
+const vaultVerifierPlainText = "password-tools:vault-verifier:v1";
+const vaultKdfIterations = 310_000;
+
+function hexToBytes(value: string) {
+  return Buffer.from(value, "hex");
+}
+
+function deriveVaultKey(masterPassword: string, salt: string) {
+  return pbkdf2Sync(masterPassword, hexToBytes(salt), vaultKdfIterations, 32, "sha256");
+}
+
+function encryptClientSecret(plainText: string, key: Buffer) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(plainText, "utf8"),
+    cipher.final(),
+    cipher.getAuthTag()
+  ]);
+  return `${clientSecretPrefix}:${iv.toString("base64url")}:${encrypted.toString("base64url")}`;
+}
 
 async function main() {
   await prisma.account.deleteMany();
@@ -14,12 +38,15 @@ async function main() {
   await prisma.user.deleteMany();
 
   const cryptoSalt = createUserSalt();
+  const vaultKey = deriveVaultKey(demoUser.password, cryptoSalt);
   const user = await prisma.user.create({
     data: {
       email: demoUser.email,
       name: demoUser.name,
       passwordHash: await bcrypt.hash(demoUser.password, 12),
       cryptoSalt,
+      vaultVerifier: encryptClientSecret(vaultVerifierPlainText, vaultKey),
+      vaultKdfIterations,
       isAdmin: true
     }
   });
@@ -69,7 +96,7 @@ async function main() {
           siteId: created.id,
           label: account.label,
           username: account.username,
-          passwordSecret: encryptSecret(account.password, cryptoSalt),
+          passwordSecret: encryptClientSecret(account.password, vaultKey),
           strength: account.strength ?? evaluateStrength(account.password),
           favorite: account.favorite,
           sortOrder: site.accounts.length - accountIndex,

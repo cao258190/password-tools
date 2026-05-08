@@ -43,7 +43,16 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     const payload = jwt.verify(token, env.jwtSecret) as TokenPayload;
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true, name: true, cryptoSalt: true, isAdmin: true, tokenVersion: true }
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        cryptoSalt: true,
+        vaultVerifier: true,
+        vaultKdfIterations: true,
+        isAdmin: true,
+        tokenVersion: true
+      }
     });
 
     const tokenVersion = typeof payload.tokenVersion === "number" ? payload.tokenVersion : 0;
@@ -64,6 +73,9 @@ export function publicUser(user: AuthUser) {
     id: user.id,
     email: user.email,
     name: user.name,
+    cryptoSalt: user.cryptoSalt,
+    vaultVerifier: user.vaultVerifier,
+    vaultKdfIterations: user.vaultKdfIterations,
     isAdmin: user.isAdmin
   };
 }
