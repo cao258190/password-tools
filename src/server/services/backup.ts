@@ -55,6 +55,7 @@ const siteBackupSchema = z.object({
   backupUrls: z.string(),
   iconType: z.string().min(1),
   iconValue: z.string().min(1),
+  iconUrl: z.string().nullable().default(null),
   iconBg: z.string().min(1),
   iconColor: z.string().min(1),
   favorite: z.boolean(),

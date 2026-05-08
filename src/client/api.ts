@@ -142,6 +142,13 @@ export const api = {
   site(id: string) {
     return request<{ site: SiteDetail }>(`/api/sites/${id}`);
   },
+  siteFavicon(url: string) {
+    const query = new URLSearchParams({ url });
+    return request<{
+      favicon: { iconUrl: string; sourceUrl: string; contentType: string };
+      icons: { iconUrl: string; sourceUrl: string; contentType: string }[];
+    }>(`/api/sites/favicon?${query.toString()}`);
+  },
   createSite(input: SiteInput & { accounts?: AccountInput[] }) {
     return request<{ site: SiteDetail }>("/api/sites", withBody("POST", input));
   },

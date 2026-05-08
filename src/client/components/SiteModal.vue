@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from "vue";
-import { Save } from "lucide-vue-next";
+import { computed, reactive, ref, watch } from "vue";
+import { Globe2, RefreshCw, Save } from "lucide-vue-next";
 import BrandMark from "./BrandMark.vue";
 import ModalFrame from "./ModalFrame.vue";
+import { api } from "../api";
 import type { Category, SiteDetail, SiteInput } from "../types";
+
+type IconChoice = {
+  iconUrl: string;
+  sourceUrl: string;
+  contentType: string;
+};
 
 const props = defineProps<{
   open: boolean;
@@ -19,6 +26,10 @@ const emit = defineEmits<{
 const backgroundColors = ["#4285f4", "#2563eb", "#22c55e", "#f97316", "#ef4444", "#8b5cf6", "#06b6d4", "#111827", "#ffffff"];
 const textColors = ["#ffffff", "#111827", "#2563eb", "#22c55e", "#f97316", "#ef4444", "#8b5cf6", "#06b6d4"];
 const title = computed(() => (props.site ? "编辑网站" : "添加网站"));
+const iconLoading = ref(false);
+const iconMessage = ref("");
+const iconMessageType = ref<"success" | "error">("success");
+const iconChoices = ref<IconChoice[]>([]);
 
 const form = reactive({
   name: "",
@@ -27,6 +38,7 @@ const form = reactive({
   categoryId: "",
   iconType: "letter",
   iconValue: "S",
+  iconUrl: null as string | null,
   iconBg: backgroundColors[0],
   iconColor: "#ffffff",
   favorite: false,
@@ -45,12 +57,16 @@ watch(
     form.categoryId = props.site?.categoryId ?? fallbackCategory;
     form.iconType = props.site?.iconType ?? "letter";
     form.iconValue = props.site?.iconValue ?? "S";
+    form.iconUrl = props.site?.iconUrl ?? null;
     form.iconBg = props.site?.iconBg ?? backgroundColors[0];
     form.iconColor = props.site?.iconColor ?? (form.iconBg.toLowerCase() === "#ffffff" ? "#111827" : "#ffffff");
     form.favorite = props.site?.favorite ?? false;
     form.sortOrder = props.site?.sortOrder ?? 0;
     form.tags = props.site?.tags.join(", ") ?? "";
     form.note = props.site?.note ?? "";
+    iconMessage.value = "";
+    iconMessageType.value = "success";
+    iconChoices.value = [];
   },
   { immediate: true }
 );
@@ -62,6 +78,55 @@ function splitLines(value: string) {
     .filter(Boolean);
 }
 
+function fallbackIconValue() {
+  return form.iconValue || form.name.slice(0, 1).toUpperCase() || "S";
+}
+
+function iconChoiceLabel(choice: IconChoice) {
+  if (choice.sourceUrl.includes("#site_logo")) return "站点配置";
+  if (choice.sourceUrl.startsWith("inline:")) return "内联图标";
+
+  try {
+    const url = new URL(choice.sourceUrl);
+    const filename = url.pathname.split("/").filter(Boolean).pop();
+    return filename || url.hostname;
+  } catch {
+    return "图标";
+  }
+}
+
+function selectIcon(choice: IconChoice) {
+  form.iconType = "favicon";
+  form.iconUrl = choice.iconUrl;
+  form.iconBg = "#ffffff";
+  form.iconColor = "#111827";
+  form.iconValue = fallbackIconValue();
+}
+
+async function fetchIcon() {
+  iconMessage.value = "";
+  iconChoices.value = [];
+  if (!form.primaryUrl.trim()) {
+    iconMessage.value = "请先填写网站地址";
+    iconMessageType.value = "error";
+    return;
+  }
+
+  iconLoading.value = true;
+  try {
+    const { favicon, icons } = await api.siteFavicon(form.primaryUrl);
+    iconChoices.value = icons.length ? icons : [favicon];
+    selectIcon(iconChoices.value[0]);
+    iconMessage.value = iconChoices.value.length > 1 ? `找到 ${iconChoices.value.length} 个图标` : "图标已获取";
+    iconMessageType.value = "success";
+  } catch (error) {
+    iconMessage.value = error instanceof Error ? error.message : "获取图标失败";
+    iconMessageType.value = "error";
+  } finally {
+    iconLoading.value = false;
+  }
+}
+
 function submit() {
   emit("submit", {
     name: form.name,
@@ -69,7 +134,8 @@ function submit() {
     backupUrls: splitLines(form.backupUrls),
     categoryId: form.categoryId || null,
     iconType: form.iconType,
-    iconValue: form.iconValue || form.name.slice(0, 1).toUpperCase() || "S",
+    iconValue: fallbackIconValue(),
+    iconUrl: form.iconType === "favicon" ? form.iconUrl : null,
     iconBg: form.iconBg,
     iconColor: form.iconColor,
     favorite: form.favorite,
@@ -101,8 +167,31 @@ function submit() {
 
       <label>
         主网站地址
-        <input v-model="form.primaryUrl" required type="url" placeholder="https://www.google.com" />
+        <div class="input-with-button icon-fetch-control">
+          <input v-model="form.primaryUrl" required type="url" placeholder="https://www.google.com" />
+          <button class="secondary" type="button" :disabled="iconLoading || !form.primaryUrl.trim()" @click="fetchIcon">
+            <RefreshCw v-if="iconLoading" class="spin" :size="16" />
+            <Globe2 v-else :size="16" />
+            获取图标
+          </button>
+        </div>
+        <small v-if="iconMessage" class="form-hint" :class="{ error: iconMessageType === 'error' }">{{ iconMessage }}</small>
       </label>
+
+      <div v-if="iconChoices.length" class="favicon-choice-panel">
+        <button
+          v-for="choice in iconChoices"
+          :key="choice.sourceUrl"
+          class="favicon-choice"
+          :class="{ selected: form.iconUrl === choice.iconUrl }"
+          type="button"
+          :title="choice.sourceUrl"
+          @click="selectIcon(choice)"
+        >
+          <img :src="choice.iconUrl" alt="" />
+          <span>{{ iconChoiceLabel(choice) }}</span>
+        </button>
+      </div>
 
       <label>
         备用网址 / 备用域名
@@ -118,6 +207,7 @@ function submit() {
           图标类型
           <select v-model="form.iconType">
             <option value="letter">文字图标</option>
+            <option value="favicon">网站图标</option>
             <option value="google">Google</option>
             <option value="microsoft">Microsoft</option>
             <option value="github">GitHub</option>
@@ -134,11 +224,12 @@ function submit() {
         <BrandMark
           :icon-type="form.iconType"
           :icon-value="form.iconValue || form.name.slice(0, 1).toUpperCase() || 'S'"
+          :icon-url="form.iconUrl"
           :icon-bg="form.iconBg"
           :icon-color="form.iconColor"
           :size="44"
         />
-        <div>
+        <div v-if="form.iconType !== 'favicon'">
           <div class="swatch-row">
             <span>背景颜色</span>
             <button
@@ -163,6 +254,9 @@ function submit() {
               @click="form.iconColor = color"
             />
           </div>
+        </div>
+        <div v-else class="icon-source-meta">
+          <span>当前使用网站图标</span>
         </div>
       </div>
 

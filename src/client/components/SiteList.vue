@@ -124,7 +124,7 @@ async function chooseSite(id: string) {
         type="button"
         @click="void chooseSite(site.id)"
       >
-        <BrandMark :icon-type="site.iconType" :icon-value="site.iconValue" :icon-bg="site.iconBg" :icon-color="site.iconColor" :size="34" />
+        <BrandMark :icon-type="site.iconType" :icon-value="site.iconValue" :icon-url="site.iconUrl" :icon-bg="site.iconBg" :icon-color="site.iconColor" :size="34" />
         <span class="site-row-main">
           <strong>{{ site.name }}</strong>
           <small>{{ site.accountCount }} 个账号</small>

@@ -466,6 +466,95 @@ describe("password vault API", () => {
     expect(detail.body.site.accountCount).toBe(1);
   });
 
+  it("resolves and stores favicons from website addresses", async () => {
+    const agent = await registerAgent("favicon@example.com");
+    const iconBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "https://example.com/") {
+        return new Response('<html><head><link rel="icon" href="/assets/icon.png"></head></html>', {
+          status: 200,
+          headers: { "content-type": "text/html" }
+        });
+      }
+      if (url === "https://example.com/assets/icon.png") {
+        return new Response(iconBytes, {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        });
+      }
+      if (url === "https://example.com/favicon.ico") {
+        return new Response("", { status: 404 });
+      }
+      throw new Error(`Unexpected favicon URL: ${url}`);
+    });
+
+    const resolved = await agent.get("/api/sites/favicon?url=https%3A%2F%2Fexample.com").expect(200);
+    const iconUrl = `data:image/png;base64,${Buffer.from(iconBytes).toString("base64")}`;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(resolved.body.favicon.sourceUrl).toBe("https://example.com/assets/icon.png");
+    expect(resolved.body.favicon.iconUrl).toBe(iconUrl);
+    expect(resolved.body.icons).toHaveLength(1);
+    expect(resolved.body.icons[0].iconUrl).toBe(iconUrl);
+
+    const created = await agent
+      .post("/api/sites")
+      .set(csrfHeader, await csrfToken(agent))
+      .send({
+        name: "Icon Site",
+        primaryUrl: "https://example.com",
+        backupUrls: [],
+        iconType: "favicon",
+        iconValue: "I",
+        iconUrl,
+        tags: [],
+        accounts: []
+      })
+      .expect(201);
+
+    expect(created.body.site.iconUrl).toBe(iconUrl);
+  });
+
+  it("prefers dynamically configured site logos over static fallback favicons", async () => {
+    const agent = await registerAgent("dynamic-favicon@example.com");
+    const configuredIcon = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 1, 2, 3, 4]).toString("base64")}`;
+    const fallbackIcon = Uint8Array.from([137, 80, 78, 71, 5, 6, 7, 8]);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "https://dynamic.example.com/") {
+        return new Response(
+          `<html><head><link rel="icon" href="/logo.png"><script>window.__APP_CONFIG__=${JSON.stringify({
+            site_logo: configuredIcon
+          })}</script></head></html>`,
+          {
+            status: 200,
+            headers: { "content-type": "text/html" }
+          }
+        );
+      }
+      if (url === "https://dynamic.example.com/logo.png") {
+        return new Response(fallbackIcon, {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        });
+      }
+      if (url === "https://dynamic.example.com/favicon.ico") {
+        return new Response("", { status: 404 });
+      }
+      throw new Error(`Unexpected dynamic favicon URL: ${url}`);
+    });
+
+    const resolved = await agent.get("/api/sites/favicon?url=https%3A%2F%2Fdynamic.example.com").expect(200);
+    const fallbackIconUrl = `data:image/png;base64,${Buffer.from(fallbackIcon).toString("base64")}`;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(resolved.body.favicon.sourceUrl).toBe("https://dynamic.example.com/#site_logo");
+    expect(resolved.body.favicon.iconUrl).toBe(configuredIcon);
+    expect(resolved.body.icons.map((icon: { iconUrl: string }) => icon.iconUrl)).toEqual([
+      configuredIcon,
+      fallbackIconUrl
+    ]);
+  });
+
   it("serializes account updates and refreshes the parent site modified time", async () => {
     const agent = await registerAgent("account-update@example.com");
     const token = await csrfToken(agent);

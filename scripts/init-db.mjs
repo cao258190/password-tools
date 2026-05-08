@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS "Site" (
   "backupUrls" TEXT NOT NULL DEFAULT '[]',
   "iconType" TEXT NOT NULL DEFAULT 'letter',
   "iconValue" TEXT NOT NULL DEFAULT 'S',
+  "iconUrl" TEXT,
   "iconBg" TEXT NOT NULL DEFAULT '#2563eb',
   "iconColor" TEXT NOT NULL DEFAULT '#ffffff',
   "favorite" BOOLEAN NOT NULL DEFAULT false,
@@ -140,6 +141,9 @@ SET "iconColor" = CASE
   ELSE '#ffffff'
 END
 `);
+}
+if (!siteColumns.includes("iconUrl")) {
+  db.exec(`ALTER TABLE "Site" ADD COLUMN "iconUrl" TEXT;`);
 }
 if (!siteColumns.includes("sortOrder")) {
   db.exec(`ALTER TABLE "Site" ADD COLUMN "sortOrder" INTEGER NOT NULL DEFAULT 0;`);

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { HttpError, asyncHandler } from "../http.js";
 import { requireAuth } from "../middleware/auth.js";
+import { resolveFavicons } from "../services/favicon.js";
 import { decryptSecret, encryptSecret } from "../utils/crypto.js";
 import { parseStringArray, stringifyStringArray } from "../utils/json.js";
 import { evaluateStrength } from "../utils/password.js";
@@ -20,6 +21,23 @@ const accountCreateSchema = z.object({
   sortOrder: z.coerce.number().int().min(-999999).max(999999).default(0)
 });
 
+const iconUrlSchema = z
+  .union([
+    z.literal(""),
+    z.null(),
+    z
+      .string()
+      .trim()
+      .max(900_000)
+      .refine(
+        (value) =>
+          /^https?:\/\//i.test(value) ||
+          /^data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[a-z0-9+/=]+$/i.test(value),
+        "图标地址格式不正确"
+      )
+  ])
+  .transform((value) => (value === "" ? null : value));
+
 const siteCreateSchema = z.object({
   name: z.string().trim().min(1).max(80),
   primaryUrl: z.string().trim().url(),
@@ -27,6 +45,7 @@ const siteCreateSchema = z.object({
   categoryId: z.string().nullable().optional(),
   iconType: z.string().trim().min(1).max(24).default("letter"),
   iconValue: z.string().trim().min(1).max(8).default("S"),
+  iconUrl: iconUrlSchema.default(null),
   iconBg: colorSchema.default("#2563eb"),
   iconColor: colorSchema.default("#ffffff"),
   favorite: z.boolean().default(false),
@@ -53,6 +72,7 @@ function serializeSite(site: SiteWithRelations, userSalt?: string) {
     category: site.category,
     iconType: site.iconType,
     iconValue: site.iconValue,
+    iconUrl: site.iconUrl,
     iconBg: site.iconBg,
     iconColor: site.iconColor,
     favorite: site.favorite,
@@ -165,6 +185,7 @@ sitesRouter.post(
         backupUrls: stringifyStringArray(input.backupUrls),
         iconType: input.iconType,
         iconValue: input.iconValue,
+        iconUrl: input.iconUrl,
         iconBg: input.iconBg,
         iconColor: input.iconColor,
         favorite: input.favorite,
@@ -187,6 +208,16 @@ sitesRouter.post(
     });
 
     res.status(201).json({ site: serializeSite(site, user.cryptoSalt) });
+  })
+);
+
+sitesRouter.get(
+  "/favicon",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const input = z.object({ url: z.string().trim().min(1).max(2048) }).parse(req.query);
+    const icons = await resolveFavicons(input.url);
+    res.json({ favicon: icons[0], icons });
   })
 );
 
@@ -242,6 +273,7 @@ sitesRouter.patch(
         categoryId: input.categoryId,
         iconType: input.iconType,
         iconValue: input.iconValue,
+        iconUrl: input.iconUrl,
         iconBg: input.iconBg,
         iconColor: input.iconColor,
         favorite: input.favorite,

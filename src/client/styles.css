@@ -742,6 +742,17 @@ a {
   line-height: 1;
 }
 
+.brand-mark-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brand-favicon {
+  border-color: rgba(226, 232, 240, 0.8);
+}
+
 .brand-google {
   font-size: 22px;
 }
@@ -1199,6 +1210,75 @@ a {
   display: grid;
   grid-template-columns: 1fr 92px;
   gap: 8px;
+}
+
+.icon-fetch-control {
+  grid-template-columns: minmax(0, 1fr) 112px;
+}
+
+.form-hint {
+  color: #8fa1ba;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.form-hint.error {
+  color: #fecaca;
+}
+
+.icon-source-meta {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  color: #8fa1ba;
+  font-size: 12px;
+}
+
+.favicon-choice-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 8px;
+}
+
+.favicon-choice {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 78px;
+  padding: 8px;
+  color: #aab8ca;
+  border: 1px solid #27364c;
+  border-radius: 8px;
+  background: #0b121d;
+}
+
+.favicon-choice:hover {
+  border-color: #3b82f6;
+  background: #101b2c;
+}
+
+.favicon-choice.selected {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+}
+
+.favicon-choice img {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #ffffff;
+  object-fit: cover;
+}
+
+.favicon-choice span {
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .password-preview {
@@ -1791,8 +1871,30 @@ html[data-theme="soft"] .menu-item,
 html[data-theme="soft"] .account-card label,
 html[data-theme="soft"] .modal-form label,
 html[data-theme="soft"] .swatch-row,
+html[data-theme="soft"] .form-hint,
+html[data-theme="soft"] .icon-source-meta,
 html[data-theme="soft"] .password-preview {
   color: #526179;
+}
+
+html[data-theme="soft"] .form-hint.error {
+  color: #b91c1c;
+}
+
+html[data-theme="soft"] .favicon-choice {
+  color: #526179;
+  border-color: #cfdbea;
+  background: #ffffff;
+}
+
+html[data-theme="soft"] .favicon-choice:hover {
+  border-color: #93c5fd;
+  background: #f1f6fd;
+}
+
+html[data-theme="soft"] .favicon-choice.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
 html[data-theme="soft"] .swatch {

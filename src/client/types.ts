@@ -108,6 +108,7 @@ export type SiteSummary = {
   category?: Category | null;
   iconType: string;
   iconValue: string;
+  iconUrl: string | null;
   iconBg: string;
   iconColor: string;
   favorite: boolean;
@@ -140,6 +141,7 @@ export type SiteInput = {
   categoryId?: string | null;
   iconType: string;
   iconValue: string;
+  iconUrl?: string | null;
   iconBg: string;
   iconColor: string;
   favorite: boolean;

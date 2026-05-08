@@ -48,6 +48,7 @@ model Site {
   backupUrls  String    @default("[]")
   iconType    String    @default("letter")
   iconValue   String    @default("S")
+  iconUrl     String?
   iconBg      String    @default("#2563eb")
   iconColor   String    @default("#ffffff")
   favorite    Boolean   @default(false)
