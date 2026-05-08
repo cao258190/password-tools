@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { CheckCircle2, Database, DownloadCloud, ExternalLink, Moon, RefreshCw, ShieldCheck, UploadCloud, UserPlus, X } from "lucide-vue-next";
+import { CheckCircle2, Database, DownloadCloud, ExternalLink, Loader2, Moon, RefreshCw, ShieldCheck, UploadCloud, UserPlus, X } from "lucide-vue-next";
 import ModalFrame from "./ModalFrame.vue";
 import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
@@ -22,6 +22,7 @@ const savingRegistration = ref(false);
 const settingsError = ref("");
 const versionInfo = ref<VersionInfo | null>(null);
 const versionLoading = ref(false);
+const updatingVersion = ref(false);
 const versionError = ref("");
 const updateConfirmOpen = ref(false);
 const updateRefreshOpen = ref(false);
@@ -61,7 +62,12 @@ const targetMatchesCurrent = computed(() => {
   return normalizeVersion(selectedTargetVersion.value) === normalizeVersion(versionInfo.value.currentVersion);
 });
 const canRunVersionUpdate = computed(
-  () => Boolean(versionInfo.value?.updateEnabled) && Boolean(selectedTargetVersion.value) && !targetMatchesCurrent.value && !versionInfo.value?.updateRunning
+  () =>
+    Boolean(versionInfo.value?.updateEnabled) &&
+    Boolean(selectedTargetVersion.value) &&
+    !targetMatchesCurrent.value &&
+    !versionInfo.value?.updateRunning &&
+    !updatingVersion.value
 );
 
 function normalizeVersion(version: string) {
@@ -151,11 +157,12 @@ function scheduleUpdateRefresh() {
 }
 
 async function runVersionUpdate() {
-  updateConfirmOpen.value = false;
-  if (!auth.user?.isAdmin) return;
+  if (!auth.user?.isAdmin || updatingVersion.value) return;
+  updatingVersion.value = true;
   versionError.value = "";
   try {
     const { update } = await api.runUpdate({ targetVersion: selectedTargetVersion.value || undefined });
+    updateConfirmOpen.value = false;
     updateWasRunning = update.status === "running";
     if (versionInfo.value) {
       versionInfo.value = {
@@ -167,6 +174,8 @@ async function runVersionUpdate() {
     scheduleUpdateRefresh();
   } catch (error) {
     versionError.value = error instanceof Error ? error.message : "启动更新失败";
+  } finally {
+    updatingVersion.value = false;
   }
 }
 
@@ -323,13 +332,14 @@ onBeforeUnmount(() => {
           </span>
           <button
             class="switch-button"
-            :class="{ active: registrationEnabled }"
+            :class="{ active: registrationEnabled, loading: savingRegistration }"
             type="button"
             :disabled="savingRegistration"
             :aria-pressed="registrationEnabled"
             @click="toggleRegistration"
           >
-            <i />
+            <RefreshCw v-if="savingRegistration" class="spin switch-loading-icon" :size="14" />
+            <i v-else />
           </button>
         </label>
         <p v-if="settingsError" class="form-error">{{ settingsError }}</p>
@@ -345,11 +355,11 @@ onBeforeUnmount(() => {
           <div class="backup-actions">
             <button class="secondary" type="button" :disabled="backupExporting" @click="exportBackup">
               <DownloadCloud :class="{ spin: backupExporting }" :size="16" />
-              导出数据
+              {{ backupExporting ? "导出中" : "导出数据" }}
             </button>
             <button class="danger subtle" type="button" :disabled="backupImporting" @click="chooseBackupFile">
               <UploadCloud :class="{ spin: backupImporting }" :size="16" />
-              导入数据
+              {{ backupImporting ? "导入中" : "导入数据" }}
             </button>
           </div>
           <input ref="backupFileInput" class="hidden-file-input" type="file" accept="application/json,.json" @change="onBackupFileSelected" />
@@ -413,7 +423,7 @@ onBeforeUnmount(() => {
           <div class="version-actions">
             <button class="secondary" type="button" :disabled="versionLoading || versionInfo?.updateRunning" @click="loadVersion(true)">
               <RefreshCw :class="{ spin: versionLoading }" :size="16" />
-              检测更新
+              {{ versionLoading ? "检测中" : "检测更新" }}
             </button>
             <a v-if="versionInfo?.latestUrl" class="secondary" :href="versionInfo.latestUrl" target="_blank" rel="noreferrer">
               <ExternalLink :size="16" />
@@ -425,8 +435,9 @@ onBeforeUnmount(() => {
               :disabled="!canRunVersionUpdate"
               @click="updateConfirmOpen = true"
             >
-              <DownloadCloud :size="16" />
-              立即更新
+              <RefreshCw v-if="versionInfo?.updateRunning" class="spin" :size="16" />
+              <DownloadCloud v-else :size="16" />
+              {{ versionInfo?.updateRunning ? "更新中" : "立即更新" }}
             </button>
           </div>
         </div>
@@ -449,14 +460,18 @@ onBeforeUnmount(() => {
     </div>
   </ModalFrame>
 
-  <ModalFrame :open="updateConfirmOpen" title="确认在线更新" @close="updateConfirmOpen = false">
+  <ModalFrame :open="updateConfirmOpen" title="确认在线更新" :dismissible="!updatingVersion" @close="updateConfirmOpen = false">
     <div class="confirm-body">
       <DownloadCloud :size="28" />
       <p>确认更新到 {{ selectedTargetVersion || "所选版本" }}？更新过程中服务可能短暂不可用。</p>
     </div>
     <footer class="modal-footer">
-      <button class="secondary" type="button" @click="updateConfirmOpen = false">取消</button>
-      <button class="danger" type="button" @click="runVersionUpdate">确认更新</button>
+      <button class="secondary" type="button" :disabled="updatingVersion" @click="updateConfirmOpen = false">取消</button>
+      <button class="danger" type="button" :disabled="updatingVersion" @click="runVersionUpdate">
+        <Loader2 v-if="updatingVersion" class="spin" :size="16" />
+        <DownloadCloud v-else :size="16" />
+        {{ updatingVersion ? "启动中" : "确认更新" }}
+      </button>
     </footer>
   </ModalFrame>
 
@@ -471,7 +486,7 @@ onBeforeUnmount(() => {
     </footer>
   </ModalFrame>
 
-  <ModalFrame :open="importConfirmOpen" title="确认导入数据" @close="importConfirmOpen = false">
+  <ModalFrame :open="importConfirmOpen" title="确认导入数据" :dismissible="!backupImporting" @close="importConfirmOpen = false">
     <div class="confirm-body">
       <UploadCloud :size="28" />
       <p>确认导入 {{ pendingBackupName || "所选备份文件" }}？当前系统中的用户、网站、账号和设置会被备份内容覆盖。</p>
@@ -480,6 +495,8 @@ onBeforeUnmount(() => {
     <footer class="modal-footer">
       <button class="secondary" type="button" :disabled="backupImporting" @click="importConfirmOpen = false">取消</button>
       <button class="danger" type="button" :disabled="backupImporting" @click="confirmImportBackup">
+        <Loader2 v-if="backupImporting" class="spin" :size="16" />
+        <UploadCloud v-else :size="16" />
         {{ backupImporting ? "导入中" : "确认导入" }}
       </button>
     </footer>

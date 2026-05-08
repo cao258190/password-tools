@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { Globe2, RefreshCw, Save } from "lucide-vue-next";
+import { Globe2, Loader2, RefreshCw, Save } from "lucide-vue-next";
 import BrandMark from "./BrandMark.vue";
 import ModalFrame from "./ModalFrame.vue";
 import { api } from "../api";
@@ -12,11 +12,14 @@ type IconChoice = {
   contentType: string;
 };
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean;
   site: SiteDetail | null;
   categories: Category[];
-}>();
+  saving?: boolean;
+}>(), {
+  saving: false
+});
 
 const emit = defineEmits<{
   close: [];
@@ -103,6 +106,10 @@ function selectIcon(choice: IconChoice) {
   form.iconValue = fallbackIconValue();
 }
 
+function requestClose() {
+  if (!props.saving) emit("close");
+}
+
 async function fetchIcon() {
   iconMessage.value = "";
   iconChoices.value = [];
@@ -128,6 +135,7 @@ async function fetchIcon() {
 }
 
 function submit() {
+  if (props.saving) return;
   emit("submit", {
     name: form.name,
     primaryUrl: form.primaryUrl,
@@ -147,7 +155,7 @@ function submit() {
 </script>
 
 <template>
-  <ModalFrame :open="open" :title="title" @close="emit('close')">
+  <ModalFrame :open="open" :title="title" :dismissible="!props.saving" @close="requestClose">
     <form class="modal-form" @submit.prevent="submit">
       <div class="form-grid">
         <label>
@@ -169,7 +177,7 @@ function submit() {
         主网站地址
         <div class="input-with-button icon-fetch-control">
           <input v-model="form.primaryUrl" required type="url" placeholder="https://www.google.com" />
-          <button class="secondary" type="button" :disabled="iconLoading || !form.primaryUrl.trim()" @click="fetchIcon">
+          <button class="secondary" type="button" :disabled="props.saving || iconLoading || !form.primaryUrl.trim()" @click="fetchIcon">
             <RefreshCw v-if="iconLoading" class="spin" :size="16" />
             <Globe2 v-else :size="16" />
             获取图标
@@ -239,6 +247,7 @@ function submit() {
               :class="{ selected: form.iconBg === color }"
               :style="{ background: color }"
               type="button"
+              :disabled="props.saving"
               @click="form.iconBg = color"
             />
           </div>
@@ -251,6 +260,7 @@ function submit() {
               :class="{ selected: form.iconColor === color }"
               :style="{ background: color }"
               type="button"
+              :disabled="props.saving"
               @click="form.iconColor = color"
             />
           </div>
@@ -271,10 +281,11 @@ function submit() {
       </label>
 
       <footer class="modal-footer">
-        <button class="secondary" type="button" @click="emit('close')">取消</button>
-        <button class="primary" type="submit">
-          <Save :size="16" />
-          保存
+        <button class="secondary" type="button" :disabled="props.saving" @click="requestClose">取消</button>
+        <button class="primary" type="submit" :disabled="props.saving">
+          <Loader2 v-if="props.saving" class="spin" :size="16" />
+          <Save v-else :size="16" />
+          {{ props.saving ? "保存中" : "保存" }}
         </button>
       </footer>
     </form>

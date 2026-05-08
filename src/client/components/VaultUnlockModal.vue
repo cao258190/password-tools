@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
-import { KeyRound, LockKeyhole, Save } from "lucide-vue-next";
+import { KeyRound, Loader2, LockKeyhole, Save } from "lucide-vue-next";
 import ModalFrame from "./ModalFrame.vue";
 
 const props = defineProps<{
@@ -51,7 +51,7 @@ function submit() {
 </script>
 
 <template>
-  <ModalFrame :open="open" :title="title" @close="emit('close')">
+  <ModalFrame :open="open" :title="title" :dismissible="!busy" @close="emit('close')">
     <form class="modal-form vault-unlock-form" @submit.prevent="submit">
       <div class="unlock-intro">
         <LockKeyhole :size="28" />
@@ -76,7 +76,8 @@ function submit() {
       <footer class="modal-footer">
         <button class="secondary" type="button" :disabled="busy" @click="emit('close')">稍后</button>
         <button class="primary" type="submit" :disabled="busy">
-          <Save v-if="setupMode" :size="16" />
+          <Loader2 v-if="busy" class="spin" :size="16" />
+          <Save v-else-if="setupMode" :size="16" />
           <KeyRound v-else :size="16" />
           {{ busy ? "处理中" : setupMode ? "设置并解锁" : "解锁" }}
         </button>

@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
-import { KeyRound, RefreshCw, Save } from "lucide-vue-next";
+import { KeyRound, Loader2, RefreshCw, Save } from "lucide-vue-next";
 import ModalFrame from "./ModalFrame.vue";
 import { api } from "../api";
 import type { Account, AccountInput } from "../types";
 import { evaluatePasswordStrength, strengthLabel } from "../utils/password";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean;
   account: Account | null;
   mode: "create" | "edit" | "generate";
-}>();
+  saving?: boolean;
+}>(), {
+  saving: false
+});
 
 const emit = defineEmits<{
   close: [];
@@ -56,7 +59,12 @@ async function generate() {
   }
 }
 
+function requestClose() {
+  if (!props.saving) emit("close");
+}
+
 function submit() {
+  if (props.saving) return;
   emit("submit", {
     label: form.label,
     username: form.username,
@@ -68,7 +76,7 @@ function submit() {
 </script>
 
 <template>
-  <ModalFrame :open="open" :title="title" @close="emit('close')">
+  <ModalFrame :open="open" :title="title" :dismissible="!props.saving" @close="requestClose">
     <form class="modal-form" @submit.prevent="submit">
       <div class="form-grid">
         <label>
@@ -90,7 +98,7 @@ function submit() {
         密码
         <div class="input-with-button">
           <input v-model="form.password" required type="text" placeholder="输入或生成安全密码" />
-          <button class="secondary" type="button" :disabled="form.generating" @click="generate">
+          <button class="secondary" type="button" :disabled="props.saving || form.generating" @click="generate">
             <RefreshCw v-if="form.generating" class="spin" :size="16" />
             <KeyRound v-else :size="16" />
             生成
@@ -110,10 +118,11 @@ function submit() {
       </div>
 
       <footer class="modal-footer">
-        <button class="secondary" type="button" @click="emit('close')">取消</button>
-        <button class="primary" type="submit">
-          <Save :size="16" />
-          保存
+        <button class="secondary" type="button" :disabled="props.saving" @click="requestClose">取消</button>
+        <button class="primary" type="submit" :disabled="props.saving">
+          <Loader2 v-if="props.saving" class="spin" :size="16" />
+          <Save v-else :size="16" />
+          {{ props.saving ? "保存中" : "保存" }}
         </button>
       </footer>
     </form>

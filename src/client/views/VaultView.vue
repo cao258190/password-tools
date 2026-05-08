@@ -34,6 +34,13 @@ const settingsOpen = ref(false);
 const profileOpen = ref(false);
 const unlockOpen = ref(false);
 const mobileView = ref<"filters" | "sites" | "detail" | "accounts">("sites");
+const siteSaving = ref(false);
+const accountSaving = ref(false);
+const deletingSiteSaving = ref(false);
+const deletingAccountSaving = ref(false);
+const backupRemovalSaving = ref(false);
+const logoutSaving = ref(false);
+const favoriteSavingId = ref("");
 let toastTimer = 0;
 
 onMounted(async () => {
@@ -88,7 +95,9 @@ function openGenerateAccount(account: Account) {
 }
 
 async function saveSite(payload: SiteInput) {
+  if (siteSaving.value) return;
   modalError.value = "";
+  siteSaving.value = true;
   try {
     if (editingSite.value) {
       await vault.updateSite(editingSite.value.id, payload);
@@ -98,13 +107,17 @@ async function saveSite(payload: SiteInput) {
     siteModalOpen.value = false;
   } catch (error) {
     modalError.value = error instanceof Error ? error.message : "保存网站失败";
+  } finally {
+    siteSaving.value = false;
   }
 }
 
 async function persistAccount(payload: AccountInput) {
-  if (!vault.selectedSiteId) return;
-  if (!ensureVaultUnlocked()) return;
+  if (!vault.selectedSiteId) return false;
+  if (!ensureVaultUnlocked()) return false;
+  if (accountSaving.value) return false;
   modalError.value = "";
+  accountSaving.value = true;
   try {
     if (editingAccount.value) {
       await vault.updateAccount(editingAccount.value.id, payload);
@@ -113,12 +126,17 @@ async function persistAccount(payload: AccountInput) {
     }
     accountModalOpen.value = false;
     accountModalMode.value = "create";
+    return true;
   } catch (error) {
     modalError.value = error instanceof Error ? error.message : "保存账号失败";
+    return false;
+  } finally {
+    accountSaving.value = false;
   }
 }
 
 async function saveAccount(payload: AccountInput) {
+  if (accountSaving.value) return;
   if (editingAccount.value && payload.password !== editingAccount.value.password) {
     pendingAccountPayload.value = payload;
     return;
@@ -130,25 +148,50 @@ async function saveAccount(payload: AccountInput) {
 async function confirmAccountPasswordChange() {
   if (!pendingAccountPayload.value) return;
   const payload = pendingAccountPayload.value;
-  pendingAccountPayload.value = null;
-  await persistAccount(payload);
+  const saved = await persistAccount(payload);
+  if (saved) pendingAccountPayload.value = null;
 }
 
 async function confirmDeleteSite() {
-  if (!deletingSite.value) return;
-  await vault.deleteSite(deletingSite.value.id);
-  deletingSite.value = null;
+  if (!deletingSite.value || deletingSiteSaving.value) return;
+  deletingSiteSaving.value = true;
+  modalError.value = "";
+  try {
+    await vault.deleteSite(deletingSite.value.id);
+    deletingSite.value = null;
+  } catch (error) {
+    modalError.value = error instanceof Error ? error.message : "删除网站失败";
+  } finally {
+    deletingSiteSaving.value = false;
+  }
 }
 
 async function confirmDeleteAccount() {
-  if (!deletingAccount.value) return;
-  await vault.deleteAccount(deletingAccount.value.id);
-  deletingAccount.value = null;
+  if (!deletingAccount.value || deletingAccountSaving.value) return;
+  deletingAccountSaving.value = true;
+  modalError.value = "";
+  try {
+    await vault.deleteAccount(deletingAccount.value.id);
+    deletingAccount.value = null;
+  } catch (error) {
+    modalError.value = error instanceof Error ? error.message : "删除账号失败";
+  } finally {
+    deletingAccountSaving.value = false;
+  }
 }
 
 async function toggleFavorite(site: SiteDetailType) {
-  await vault.updateSite(site.id, { favorite: !site.favorite });
-  showToast(site.favorite ? "已取消收藏" : "已加入收藏");
+  if (favoriteSavingId.value) return;
+  favoriteSavingId.value = site.id;
+  modalError.value = "";
+  try {
+    await vault.updateSite(site.id, { favorite: !site.favorite });
+    showToast(site.favorite ? "已取消收藏" : "已加入收藏");
+  } catch (error) {
+    modalError.value = error instanceof Error ? error.message : "更新收藏失败";
+  } finally {
+    favoriteSavingId.value = "";
+  }
 }
 
 async function removeBackupUrl(site: SiteDetailType, url: string) {
@@ -156,19 +199,34 @@ async function removeBackupUrl(site: SiteDetailType, url: string) {
 }
 
 async function confirmRemoveBackupUrl() {
-  if (!pendingBackupRemoval.value) return;
+  if (!pendingBackupRemoval.value || backupRemovalSaving.value) return;
   const { site, url } = pendingBackupRemoval.value;
   const backupUrls = site.backupUrls.filter((item) => item !== url);
-  await vault.updateSite(site.id, { backupUrls });
-  pendingBackupRemoval.value = null;
-  showToast("备用网址已移除");
+  backupRemovalSaving.value = true;
+  modalError.value = "";
+  try {
+    await vault.updateSite(site.id, { backupUrls });
+    pendingBackupRemoval.value = null;
+    showToast("备用网址已移除");
+  } catch (error) {
+    modalError.value = error instanceof Error ? error.message : "移除备用网址失败";
+  } finally {
+    backupRemovalSaving.value = false;
+  }
 }
 
 async function confirmLogout() {
-  logoutConfirmOpen.value = false;
-  vault.lockVault();
-  await auth.logout();
-  window.location.assign("/login");
+  if (logoutSaving.value) return;
+  logoutSaving.value = true;
+  modalError.value = "";
+  try {
+    vault.lockVault();
+    await auth.logout();
+    window.location.assign("/login");
+  } catch (error) {
+    modalError.value = error instanceof Error ? error.message : "退出登录失败";
+    logoutSaving.value = false;
+  }
 }
 
 function ensureVaultUnlocked() {
@@ -211,6 +269,7 @@ function showToast(message: string) {
       <SiteDetail
         :site="vault.selectedSite"
         :loading="vault.detailLoading"
+        :favorite-saving-id="favoriteSavingId"
         @edit="openEditSite"
         @delete="deletingSite = $event"
         @toggle-favorite="toggleFavorite"
@@ -258,6 +317,7 @@ function showToast(message: string) {
       :open="siteModalOpen"
       :site="editingSite"
       :categories="vault.categories"
+      :saving="siteSaving"
       @close="siteModalOpen = false"
       @submit="saveSite"
     />
@@ -266,6 +326,7 @@ function showToast(message: string) {
       :open="accountModalOpen"
       :account="editingAccount"
       :mode="accountModalMode"
+      :saving="accountSaving"
       @close="accountModalOpen = false; accountModalMode = 'create'"
       @submit="saveAccount"
     />
@@ -274,6 +335,8 @@ function showToast(message: string) {
       :open="Boolean(deletingSite)"
       title="删除网站"
       :message="`确认删除 ${deletingSite?.name ?? ''}？该网站下的账号也会被删除。`"
+      :loading="deletingSiteSaving"
+      loading-text="删除中"
       @close="deletingSite = null"
       @confirm="confirmDeleteSite"
     />
@@ -282,6 +345,8 @@ function showToast(message: string) {
       :open="Boolean(deletingAccount)"
       title="删除账号"
       :message="`确认删除 ${deletingAccount?.label ?? ''}？`"
+      :loading="deletingAccountSaving"
+      loading-text="删除中"
       @close="deletingAccount = null"
       @confirm="confirmDeleteAccount"
     />
@@ -291,6 +356,8 @@ function showToast(message: string) {
       title="移除备用网址"
       :message="`确认移除 ${pendingBackupRemoval?.url ?? ''}？移除后需要重新编辑网站才能加回。`"
       confirm-text="确认移除"
+      :loading="backupRemovalSaving"
+      loading-text="移除中"
       @close="pendingBackupRemoval = null"
       @confirm="confirmRemoveBackupUrl"
     />
@@ -300,6 +367,8 @@ function showToast(message: string) {
       title="覆盖账号密码"
       :message="`确认更新 ${editingAccount?.label ?? ''} 的密码？保存后旧密码将被新密码替换。`"
       confirm-text="确认覆盖"
+      :loading="accountSaving"
+      loading-text="保存中"
       @close="pendingAccountPayload = null"
       @confirm="confirmAccountPasswordChange"
     />
@@ -309,6 +378,8 @@ function showToast(message: string) {
       title="退出登录"
       message="确认退出当前账号？未保存的编辑内容会丢失。"
       confirm-text="退出"
+      :loading="logoutSaving"
+      loading-text="退出中"
       @close="logoutConfirmOpen = false"
       @confirm="confirmLogout"
     />

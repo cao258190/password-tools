@@ -11,6 +11,7 @@ const email = ref("");
 const password = ref("");
 const name = ref("");
 const error = ref("");
+const demoLoading = ref(false);
 
 const title = computed(() => (mode.value === "login" ? "欢迎回来" : "创建保险库"));
 
@@ -26,6 +27,7 @@ onMounted(() => {
 });
 
 async function submit() {
+  if (auth.loading) return;
   error.value = "";
   if (mode.value === "register" && !auth.publicSettings.registrationEnabled) {
     error.value = "管理员已关闭新用户注册";
@@ -44,9 +46,15 @@ async function submit() {
 }
 
 async function useDemo() {
+  if (auth.loading) return;
+  demoLoading.value = true;
   email.value = "demo@example.com";
   password.value = "demo123456";
-  await submit();
+  try {
+    await submit();
+  } finally {
+    demoLoading.value = false;
+  }
 }
 </script>
 
@@ -84,21 +92,25 @@ async function useDemo() {
         <button class="primary wide" type="submit" :disabled="auth.loading">
           <Loader2 v-if="auth.loading" class="spin" :size="18" />
           <KeyRound v-else :size="18" />
-          {{ mode === "login" ? "登录保险库" : "创建账号" }}
+          {{ auth.loading ? (mode === "login" ? "登录中" : "创建中") : mode === "login" ? "登录保险库" : "创建账号" }}
         </button>
       </form>
 
       <div class="auth-actions">
-        <button class="ghost" type="button" @click="useDemo">使用演示账号</button>
+        <button class="ghost" type="button" :disabled="auth.loading" @click="useDemo">
+          <Loader2 v-if="demoLoading" class="spin" :size="16" />
+          {{ demoLoading ? "演示登录中" : "使用演示账号" }}
+        </button>
         <button
           v-if="mode === 'login' && auth.publicSettings.registrationEnabled"
           class="link-button"
           type="button"
+          :disabled="auth.loading"
           @click="mode = 'register'"
         >
           注册新账号
         </button>
-        <button v-else-if="mode === 'register'" class="link-button" type="button" @click="mode = 'login'">
+        <button v-else-if="mode === 'register'" class="link-button" type="button" :disabled="auth.loading" @click="mode = 'login'">
           返回登录
         </button>
       </div>

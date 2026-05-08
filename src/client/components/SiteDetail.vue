@@ -1,14 +1,5 @@
 <script setup lang="ts">
-import {
-  Copy,
-  Edit3,
-  ExternalLink,
-  Globe2,
-  PlusCircle,
-  Star,
-  Trash2,
-  X
-} from "lucide-vue-next";
+import { Copy, Edit3, ExternalLink, Globe2, Loader2, PlusCircle, Star, Trash2, X } from "lucide-vue-next";
 import BrandMark from "./BrandMark.vue";
 import type { SiteDetail } from "../types";
 import { useVaultStore } from "../stores/vault";
@@ -17,6 +8,7 @@ import { relativeTime } from "../utils/password";
 const props = defineProps<{
   site: SiteDetail | null;
   loading: boolean;
+  favoriteSavingId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -55,8 +47,9 @@ async function copyValue(value: string, id: string) {
           <span>最近修改：{{ relativeTime(props.site.updatedAt) }}</span>
         </div>
         <div class="detail-actions">
-          <button class="icon-button favorite-button" type="button" :class="{ active: props.site.favorite }" :title="props.site.favorite ? '取消收藏网站' : '收藏网站'" @click="emit('toggleFavorite', props.site)">
-            <Star :size="17" :fill="props.site.favorite ? 'currentColor' : 'none'" />
+          <button class="icon-button favorite-button" type="button" :class="{ active: props.site.favorite }" :title="props.site.favorite ? '取消收藏网站' : '收藏网站'" :disabled="favoriteSavingId === props.site.id" @click="emit('toggleFavorite', props.site)">
+            <Loader2 v-if="favoriteSavingId === props.site.id" class="spin" :size="17" />
+            <Star v-else :size="17" :fill="props.site.favorite ? 'currentColor' : 'none'" />
           </button>
           <button class="secondary" type="button" @click="emit('edit', props.site)">
             <Edit3 :size="16" />

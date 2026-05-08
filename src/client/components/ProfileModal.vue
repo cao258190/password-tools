@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
-import { KeyRound, Save, UserRound } from "lucide-vue-next";
+import { KeyRound, Loader2, Save, UserRound } from "lucide-vue-next";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import ModalFrame from "./ModalFrame.vue";
 import { useAuthStore } from "../stores/auth";
@@ -56,6 +56,7 @@ function resetPasswordForm() {
 }
 
 async function saveProfile() {
+  if (profileForm.saving) return;
   profileForm.error = "";
   profileForm.saving = true;
   try {
@@ -72,6 +73,7 @@ async function saveProfile() {
 }
 
 function requestPasswordChange() {
+  if (passwordForm.saving) return;
   passwordForm.error = "";
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
     passwordForm.error = "两次输入的新密码不一致";
@@ -82,8 +84,9 @@ function requestPasswordChange() {
 }
 
 async function changePassword() {
-  passwordConfirmOpen.value = false;
+  if (passwordForm.saving) return;
   passwordForm.saving = true;
+  passwordForm.error = "";
   try {
     await auth.changePassword({
       currentPassword: passwordForm.currentPassword,
@@ -93,6 +96,7 @@ async function changePassword() {
     emit("notice", "密码已更新");
   } catch (error) {
     passwordForm.error = error instanceof Error ? error.message : "修改密码失败";
+    passwordConfirmOpen.value = false;
   } finally {
     passwordForm.saving = false;
   }
@@ -121,7 +125,8 @@ async function changePassword() {
           <p v-if="profileForm.error" class="form-error">{{ profileForm.error }}</p>
           <footer class="modal-footer">
             <button class="primary" type="submit" :disabled="profileForm.saving">
-              <Save :size="16" />
+              <Loader2 v-if="profileForm.saving" class="spin" :size="16" />
+              <Save v-else :size="16" />
               {{ profileForm.saving ? "保存中" : "保存信息" }}
             </button>
           </footer>
@@ -150,9 +155,10 @@ async function changePassword() {
           </div>
           <p v-if="passwordForm.error" class="form-error">{{ passwordForm.error }}</p>
           <footer class="modal-footer">
-            <button class="secondary" type="button" @click="resetPasswordForm">清空</button>
+            <button class="secondary" type="button" :disabled="passwordForm.saving" @click="resetPasswordForm">清空</button>
             <button class="primary" type="submit" :disabled="passwordForm.saving">
-              <KeyRound :size="16" />
+              <Loader2 v-if="passwordForm.saving" class="spin" :size="16" />
+              <KeyRound v-else :size="16" />
               {{ passwordForm.saving ? "更新中" : "更新密码" }}
             </button>
           </footer>
@@ -166,6 +172,8 @@ async function changePassword() {
     title="更新登录密码"
     message="确认更新登录密码？更新后需要使用新密码登录。"
     confirm-text="确认更新"
+    :loading="passwordForm.saving"
+    loading-text="更新中"
     @close="passwordConfirmOpen = false"
     @confirm="changePassword"
   />
