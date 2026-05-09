@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { isIP } from "node:net";
+import { lookup } from "node:dns/promises";
+import { BlockList, isIP } from "node:net";
 import { HttpError } from "../http.js";
 
 const htmlByteLimit = 900_000;
@@ -9,6 +10,7 @@ const maxIconCandidates = 8;
 const maxIconResults = 6;
 const dataImagePattern =
   /^data:(image\/(?:png|jpeg|jpg|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon));base64,([a-z0-9+/=]+)$/i;
+const dnsLookupOptions = { all: true, verbatim: true } as const;
 
 const supportedImageTypes = new Set([
   "image/png",
@@ -31,6 +33,36 @@ type IconCandidate = {
   sourceUrl?: string;
 };
 
+class BlockedFaviconHostError extends HttpError {
+  constructor() {
+    super(400, "暂不支持获取本机或内网地址的图标");
+  }
+}
+
+const blockedIpAddresses = new BlockList();
+blockedIpAddresses.addSubnet("0.0.0.0", 8, "ipv4");
+blockedIpAddresses.addSubnet("10.0.0.0", 8, "ipv4");
+blockedIpAddresses.addSubnet("100.64.0.0", 10, "ipv4");
+blockedIpAddresses.addSubnet("127.0.0.0", 8, "ipv4");
+blockedIpAddresses.addSubnet("169.254.0.0", 16, "ipv4");
+blockedIpAddresses.addSubnet("172.16.0.0", 12, "ipv4");
+blockedIpAddresses.addSubnet("192.0.0.0", 24, "ipv4");
+blockedIpAddresses.addSubnet("192.0.2.0", 24, "ipv4");
+blockedIpAddresses.addSubnet("192.88.99.0", 24, "ipv4");
+blockedIpAddresses.addSubnet("192.168.0.0", 16, "ipv4");
+blockedIpAddresses.addSubnet("198.18.0.0", 15, "ipv4");
+blockedIpAddresses.addSubnet("198.51.100.0", 24, "ipv4");
+blockedIpAddresses.addSubnet("203.0.113.0", 24, "ipv4");
+blockedIpAddresses.addSubnet("224.0.0.0", 4, "ipv4");
+blockedIpAddresses.addSubnet("240.0.0.0", 4, "ipv4");
+blockedIpAddresses.addAddress("::", "ipv6");
+blockedIpAddresses.addAddress("::1", "ipv6");
+blockedIpAddresses.addSubnet("100::", 64, "ipv6");
+blockedIpAddresses.addSubnet("2001:db8::", 32, "ipv6");
+blockedIpAddresses.addSubnet("fc00::", 7, "ipv6");
+blockedIpAddresses.addSubnet("fe80::", 10, "ipv6");
+blockedIpAddresses.addSubnet("ff00::", 8, "ipv6");
+
 function normalizeWebsiteUrl(rawUrl: string) {
   const trimmed = rawUrl.trim();
   const withProtocol = /^[a-z][a-z\d+\-.]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -51,51 +83,63 @@ function normalizeWebsiteUrl(rawUrl: string) {
   }
 
   if (isBlockedHost(url.hostname)) {
-    throw new HttpError(400, "暂不支持获取本机或内网地址的图标");
+    throw new BlockedFaviconHostError();
   }
 
   return url;
 }
 
-function isBlockedHost(hostname: string) {
+function normalizeHostname(hostname: string) {
   const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (host.startsWith("[") && host.endsWith("]")) return host.slice(1, -1);
+  return host;
+}
+
+function isBlockedHost(hostname: string) {
+  const host = normalizeHostname(hostname);
   if (host === "localhost" || host.endsWith(".localhost")) return true;
 
-  const ipVersion = isIP(host);
+  return isBlockedAddress(host);
+}
+
+function isBlockedAddress(address: string) {
+  const ipVersion = isIP(address);
   if (!ipVersion) return false;
 
-  if (ipVersion === 6) {
-    return (
-      host === "::" ||
-      host === "::1" ||
-      host.startsWith("fc") ||
-      host.startsWith("fd") ||
-      host.startsWith("fe80:")
-    );
+  return blockedIpAddresses.check(address, ipVersion === 4 ? "ipv4" : "ipv6");
+}
+
+async function assertSafeRequestHostname(url: URL) {
+  const hostname = normalizeHostname(url.hostname);
+  if (isBlockedHost(hostname)) {
+    throw new BlockedFaviconHostError();
   }
 
-  const [first, second] = host.split(".").map((part) => Number(part));
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    first >= 224
-  );
+  if (isIP(hostname)) return;
+
+  let addresses: Array<{ address: string }>;
+  try {
+    addresses = await lookup(hostname, dnsLookupOptions);
+  } catch {
+    return;
+  }
+
+  if (addresses.length === 0 || addresses.some(({ address }) => isBlockedAddress(address))) {
+    throw new BlockedFaviconHostError();
+  }
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}) {
-  let currentUrl = normalizeWebsiteUrl(url).toString();
+  let currentUrl = normalizeWebsiteUrl(url);
 
   for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
+    await assertSafeRequestHostname(currentUrl);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
     try {
-      const response = await fetch(currentUrl, {
+      const response = await fetch(currentUrl.toString(), {
         ...init,
         redirect: "manual",
         headers: {
@@ -108,7 +152,7 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}) {
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.get("location");
         if (!location) return response;
-        currentUrl = normalizeWebsiteUrl(new URL(location, currentUrl).toString()).toString();
+        currentUrl = normalizeWebsiteUrl(new URL(location, currentUrl).toString());
         continue;
       }
 
@@ -413,7 +457,8 @@ export async function resolveFavicons(rawUrl: string): Promise<FaviconResult[]> 
     for (const candidate of extractIconCandidates(html, websiteUrl).slice(0, maxIconCandidates - 1)) {
       addCandidate(candidate);
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof BlockedFaviconHostError) throw error;
     // The conventional favicon path is still worth trying.
   }
 

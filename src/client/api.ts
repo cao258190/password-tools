@@ -5,6 +5,8 @@ import type {
   AdminSettings,
   BackupImportResult,
   Category,
+  LegacyMigrationAccount,
+  LegacyMigrationSecretInput,
   PublicSettings,
   SiteDetail,
   SiteInput,
@@ -167,6 +169,12 @@ export const api = {
   },
   updateAccount(id: string, input: Partial<AccountSecretInput>) {
     return request<{ account: Account }>(`/api/accounts/${id}`, withBody("PATCH", input));
+  },
+  legacyMigrationAccounts() {
+    return request<{ accounts: LegacyMigrationAccount[] }>("/api/accounts/legacy-migration");
+  },
+  submitLegacyMigration(input: { accounts: LegacyMigrationSecretInput[] }) {
+    return request<{ migrated: number }>("/api/accounts/legacy-migration", withBody("POST", input));
   },
   deleteAccount(id: string) {
     return request<void>(`/api/accounts/${id}`, withBody("DELETE"));

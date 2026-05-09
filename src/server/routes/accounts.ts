@@ -24,6 +24,18 @@ const accountPatchSchema = z.object({
   sortOrder: z.coerce.number().int().min(-999999).max(999999).optional()
 });
 
+const legacyMigrationSchema = z.object({
+  accounts: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        passwordSecret: passwordSecretSchema
+      })
+    )
+    .max(1000)
+    .refine((accounts) => new Set(accounts.map((account) => account.id)).size === accounts.length, "Duplicate accounts")
+});
+
 function serializeAccount(account: Account, userSalt: string) {
   const clientEncrypted = isClientEncryptedSecret(account.passwordSecret);
   let legacyPassword: string | undefined;
@@ -55,6 +67,94 @@ function serializeAccount(account: Account, userSalt: string) {
     lastUsedAt: account.lastUsedAt
   };
 }
+
+accountsRouter.get(
+  "/legacy-migration",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = req.authUser!;
+    const accounts = await prisma.account.findMany({
+      where: { userId: user.id },
+      select: {
+        id: true,
+        passwordSecret: true
+      },
+      orderBy: { id: "asc" }
+    });
+
+    const legacyAccounts = accounts.flatMap((account) => {
+      if (isClientEncryptedSecret(account.passwordSecret)) return [];
+
+      try {
+        const legacyPassword = decryptSecret(account.passwordSecret, user.cryptoSalt);
+        return legacyPassword ? [{ id: account.id, legacyPassword }] : [];
+      } catch {
+        return [];
+      }
+    });
+
+    res.json({ accounts: legacyAccounts });
+  })
+);
+
+accountsRouter.post(
+  "/legacy-migration",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const input = legacyMigrationSchema.parse(req.body);
+    const userId = req.authUser!.id;
+
+    if (input.accounts.length === 0) {
+      res.json({ migrated: 0 });
+      return;
+    }
+
+    const migrationById = new Map(input.accounts.map((account) => [account.id, account.passwordSecret]));
+    const accounts = await prisma.account.findMany({
+      where: {
+        id: { in: input.accounts.map((account) => account.id) },
+        userId
+      },
+      select: {
+        id: true,
+        siteId: true,
+        passwordSecret: true
+      }
+    });
+
+    if (accounts.length !== input.accounts.length) {
+      throw new HttpError(404, "Account not found");
+    }
+
+    const legacyAccounts = accounts.filter((account) => !isClientEncryptedSecret(account.passwordSecret));
+
+    if (legacyAccounts.length > 0) {
+      const siteIds = [...new Set(legacyAccounts.map((account) => account.siteId))];
+      const updatedAt = new Date();
+
+      await prisma.$transaction(async (transaction) => {
+        await Promise.all(
+          legacyAccounts.map((account) =>
+            transaction.account.update({
+              where: { id: account.id },
+              data: { passwordSecret: migrationById.get(account.id)! }
+            })
+          )
+        );
+
+        await transaction.site.updateMany({
+          where: {
+            id: { in: siteIds },
+            userId
+          },
+          data: { updatedAt }
+        });
+      });
+    }
+
+    res.json({ migrated: legacyAccounts.length });
+  })
+);
 
 accountsRouter.patch(
   "/:id",

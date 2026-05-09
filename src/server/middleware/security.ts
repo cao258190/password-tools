@@ -20,6 +20,53 @@ function sameToken(left: string, right: string) {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function originOf(value: string | undefined) {
+  if (!value || value === "null") return null;
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function requestOrigin(req: Request) {
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || req.get("host");
+  if (!host) return null;
+
+  const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  return originOf(`${forwardedProto || req.protocol}://${host}`);
+}
+
+function trustedOrigins(req: Request) {
+  const origins = new Set<string>();
+  const configuredOrigin = originOf(env.corsOrigin);
+  const currentOrigin = requestOrigin(req);
+
+  if (configuredOrigin) origins.add(configuredOrigin);
+  if (currentOrigin) origins.add(currentOrigin);
+
+  return origins;
+}
+
+function isTrustedSource(req: Request) {
+  const fetchSite = req.get("sec-fetch-site")?.toLowerCase();
+  if (fetchSite === "cross-site") return false;
+
+  const origins = trustedOrigins(req);
+  const sourceHeaders = [req.get("origin"), req.get("referer")];
+
+  for (const source of sourceHeaders) {
+    if (!source) continue;
+
+    const sourceOrigin = originOf(source);
+    if (!sourceOrigin || !origins.has(sourceOrigin)) return false;
+  }
+
+  return true;
+}
+
 function clientIp(req: Request) {
   return req.ip || req.socket.remoteAddress || "unknown";
 }
@@ -50,6 +97,11 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     maxAge: 1000 * 60 * 60 * 24 * 7,
     path: "/"
   });
+
+  if (csrfMethods.has(req.method) && !isTrustedSource(req)) {
+    next(new HttpError(403, "Request origin validation failed"));
+    return;
+  }
 
   if (!csrfMethods.has(req.method) || req.path === "/api/auth/login") {
     next();

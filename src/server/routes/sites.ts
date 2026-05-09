@@ -1,4 +1,4 @@
-import type { Account, Category, Site } from "@prisma/client";
+import type { Account, Category, Prisma, Site } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
@@ -68,6 +68,30 @@ type SiteWithRelations = Site & {
   accounts: Account[];
 };
 
+const siteListSelect = {
+  id: true,
+  name: true,
+  primaryUrl: true,
+  backupUrls: true,
+  categoryId: true,
+  category: true,
+  iconType: true,
+  iconValue: true,
+  iconUrl: true,
+  iconBg: true,
+  iconColor: true,
+  favorite: true,
+  sortOrder: true,
+  tags: true,
+  note: true,
+  createdAt: true,
+  updatedAt: true,
+  lastUsedAt: true,
+  _count: { select: { accounts: true } }
+} satisfies Prisma.SiteSelect;
+
+type SiteListItem = Prisma.SiteGetPayload<{ select: typeof siteListSelect }>;
+
 function serializeAccount(account: Account, userSalt: string) {
   const clientEncrypted = isClientEncryptedSecret(account.passwordSecret);
   let legacyPassword: string | undefined;
@@ -100,6 +124,30 @@ function serializeAccount(account: Account, userSalt: string) {
   };
 }
 
+function serializeSiteSummary(site: SiteListItem) {
+  return {
+    id: site.id,
+    name: site.name,
+    primaryUrl: site.primaryUrl,
+    backupUrls: parseStringArray(site.backupUrls),
+    categoryId: site.categoryId,
+    category: site.category,
+    iconType: site.iconType,
+    iconValue: site.iconValue,
+    iconUrl: site.iconUrl,
+    iconBg: site.iconBg,
+    iconColor: site.iconColor,
+    favorite: site.favorite,
+    sortOrder: site.sortOrder,
+    tags: parseStringArray(site.tags),
+    note: site.note ?? "",
+    accountCount: site._count.accounts,
+    createdAt: site.createdAt,
+    updatedAt: site.updatedAt,
+    lastUsedAt: site.lastUsedAt
+  };
+}
+
 function serializeSite(site: SiteWithRelations, userSalt?: string) {
   return {
     id: site.id,
@@ -127,18 +175,74 @@ function serializeSite(site: SiteWithRelations, userSalt?: string) {
   };
 }
 
-function matchesSearch(site: SiteWithRelations, search: string) {
-  if (!search) return true;
-  const haystack = [
-    site.name,
-    site.primaryUrl,
-    site.note ?? "",
-    ...parseStringArray(site.tags),
-    ...site.accounts.flatMap((account) => [account.label, account.username])
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(search.toLowerCase());
+function buildSiteListSearchWhere(search: string): Prisma.SiteWhereInput | undefined {
+  if (!search) return undefined;
+
+  return {
+    OR: [
+      { name: { contains: search } },
+      { primaryUrl: { contains: search } },
+      { note: { contains: search } },
+      { tags: { contains: search } },
+      {
+        accounts: {
+          some: {
+            OR: [
+              { label: { contains: search } },
+              { username: { contains: search } }
+            ]
+          }
+        }
+      }
+    ]
+  };
+}
+
+function buildSiteListWhere(input: {
+  userId: string;
+  search: string;
+  categoryId: string;
+  tag: string;
+  favoriteOnly: boolean;
+  scope: string;
+}): Prisma.SiteWhereInput {
+  const and: Prisma.SiteWhereInput[] = [];
+
+  if (input.scope === "recent") {
+    and.push({ lastUsedAt: { not: null } });
+  }
+
+  if (input.tag) {
+    and.push({ tags: { contains: JSON.stringify(input.tag) } });
+  }
+
+  const searchWhere = buildSiteListSearchWhere(input.search);
+  if (searchWhere) {
+    and.push(searchWhere);
+  }
+
+  return {
+    userId: input.userId,
+    ...(input.categoryId && input.categoryId !== "all" ? { categoryId: input.categoryId } : {}),
+    ...(input.favoriteOnly ? { favorite: true } : {}),
+    ...(and.length ? { AND: and } : {})
+  };
+}
+
+function buildSiteListOrderBy(sort: string, scope: string): Prisma.SiteOrderByWithRelationInput[] {
+  if (sort === "name") {
+    return [{ name: "asc" }, { sortOrder: "desc" }, { updatedAt: "desc" }];
+  }
+
+  if (sort === "accounts") {
+    return [{ accounts: { _count: "desc" } }, { name: "asc" }, { sortOrder: "desc" }, { updatedAt: "desc" }];
+  }
+
+  if (sort === "recent" || scope === "recent") {
+    return [{ lastUsedAt: "desc" }, { sortOrder: "desc" }, { updatedAt: "desc" }];
+  }
+
+  return [{ sortOrder: "desc" }, { updatedAt: "desc" }];
 }
 
 sitesRouter.get(
@@ -154,38 +258,20 @@ sitesRouter.get(
     const sort = String(req.query.sort ?? "sort");
 
     const sites = await prisma.site.findMany({
-      where: {
+      where: buildSiteListWhere({
         userId,
-        ...(categoryId && categoryId !== "all" ? { categoryId } : {}),
-        ...(favoriteOnly ? { favorite: true } : {})
-      },
-      include: {
-        category: true,
-        accounts: { orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }] }
-      },
-      orderBy: [{ sortOrder: "desc" }, { updatedAt: "desc" }]
-    });
-
-    const filtered = sites.filter((site) => {
-      const tagMatch = !tag || parseStringArray(site.tags).includes(tag);
-      const recentMatch = scope !== "recent" || Boolean(site.lastUsedAt);
-      return tagMatch && recentMatch && matchesSearch(site, search);
-    });
-
-    filtered.sort((left, right) => {
-      if (sort === "name") return left.name.localeCompare(right.name);
-      if (sort === "accounts") return right.accounts.length - left.accounts.length || left.name.localeCompare(right.name);
-      if (sort === "recent" || scope === "recent") {
-        return (right.lastUsedAt?.getTime() ?? 0) - (left.lastUsedAt?.getTime() ?? 0);
-      }
-      return right.sortOrder - left.sortOrder || right.updatedAt.getTime() - left.updatedAt.getTime();
+        search,
+        categoryId,
+        tag,
+        favoriteOnly,
+        scope
+      }),
+      select: siteListSelect,
+      orderBy: buildSiteListOrderBy(sort, scope)
     });
 
     res.json({
-      sites: filtered.map((site) => {
-        const { accounts: _accounts, ...summary } = serializeSite(site);
-        return summary;
-      })
+      sites: sites.map((site) => serializeSiteSummary(site))
     });
   })
 );

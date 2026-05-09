@@ -170,3 +170,13 @@ export type AccountInput = {
 export type AccountSecretInput = Omit<AccountInput, "password"> & {
   passwordSecret?: string;
 };
+
+export type LegacyMigrationAccount = {
+  id: string;
+  legacyPassword: string;
+};
+
+export type LegacyMigrationSecretInput = {
+  id: string;
+  passwordSecret: string;
+};

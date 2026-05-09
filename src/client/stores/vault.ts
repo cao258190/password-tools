@@ -387,25 +387,19 @@ export const useVaultStore = defineStore("vault", {
       }
     },
     async migrateLegacyAccounts() {
-      if (!activeVaultKey) return;
+      const vaultKey = activeVaultKey;
+      if (!vaultKey) return;
 
-      const { sites } = await api.sites({ scope: "all", sort: "sort" });
-      let migrated = 0;
+      const { accounts } = await api.legacyMigrationAccounts();
+      if (accounts.length === 0) return;
 
-      for (const siteSummary of sites) {
-        const { site } = await api.site(siteSummary.id);
-        for (const account of site.accounts) {
-          const legacyPassword = account.legacyPassword ?? (
-            isClientEncryptedSecret(account.passwordSecret) ? "" : account.password
-          );
-          if (!legacyPassword || isClientEncryptedSecret(account.passwordSecret)) continue;
-
-          await api.updateAccount(account.id, {
-            passwordSecret: await encryptVaultText(legacyPassword, activeVaultKey)
-          });
-          migrated += 1;
-        }
-      }
+      const migrationAccounts = await Promise.all(
+        accounts.map(async (account) => ({
+          id: account.id,
+          passwordSecret: await encryptVaultText(account.legacyPassword, vaultKey)
+        }))
+      );
+      const { migrated } = await api.submitLegacyMigration({ accounts: migrationAccounts });
 
       if (migrated > 0) {
         this.legacyMigrationCount = migrated;
