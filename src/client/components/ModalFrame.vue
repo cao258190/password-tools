@@ -6,6 +6,7 @@ const props = withDefaults(defineProps<{
   open: boolean;
   title: string;
   dismissible?: boolean;
+  frameClass?: string;
 }>(), {
   dismissible: true
 });
@@ -37,7 +38,7 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <div v-if="open" ref="backdrop" class="modal-backdrop" @pointerdown.self="requestClose">
-      <section class="modal-frame">
+      <section class="modal-frame" :class="props.frameClass">
         <header class="modal-header">
           <h2>{{ title }}</h2>
           <button class="icon-button" type="button" aria-label="关闭" :disabled="!dismissible" @click="requestClose">

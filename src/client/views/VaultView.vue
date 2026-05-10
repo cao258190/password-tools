@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { FileText, FolderTree, ListChecks, LockKeyhole, UsersRound } from "lucide-vue-next";
+import { useRouter } from "vue-router";
+import { LockKeyhole } from "lucide-vue-next";
 import AccountModal from "../components/AccountModal.vue";
 import AccountPanel from "../components/AccountPanel.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import MobileVaultShell from "../components/MobileVaultShell.vue";
 import ProfileModal from "../components/ProfileModal.vue";
 import SettingsPanel from "../components/SettingsPanel.vue";
 import SidebarNav from "../components/SidebarNav.vue";
@@ -18,6 +20,7 @@ import type { Account, AccountInput, SiteDetail as SiteDetailType, SiteInput } f
 
 const auth = useAuthStore();
 const vault = useVaultStore();
+const router = useRouter();
 const siteModalOpen = ref(false);
 const accountModalOpen = ref(false);
 const accountModalMode = ref<"create" | "edit" | "generate">("create");
@@ -33,7 +36,6 @@ const toast = ref("");
 const settingsOpen = ref(false);
 const profileOpen = ref(false);
 const unlockOpen = ref(false);
-const mobileView = ref<"filters" | "sites" | "detail" | "accounts">("sites");
 const siteSaving = ref(false);
 const accountSaving = ref(false);
 const deletingSiteSaving = ref(false);
@@ -56,10 +58,6 @@ function openCreateSite() {
   siteModalOpen.value = true;
 }
 
-function openMobileView(view: typeof mobileView.value) {
-  mobileView.value = view;
-}
-
 function openEditSite(site: SiteDetailType) {
   editingSite.value = site;
   modalError.value = "";
@@ -72,10 +70,6 @@ function openCreateAccount() {
   modalError.value = "";
   accountModalMode.value = "create";
   accountModalOpen.value = true;
-}
-
-function handleSiteSelected() {
-  mobileView.value = "detail";
 }
 
 function openEditAccount(account: Account) {
@@ -222,7 +216,8 @@ async function confirmLogout() {
   try {
     vault.lockVault();
     await auth.logout();
-    window.location.assign("/login");
+    logoutConfirmOpen.value = false;
+    await router.replace({ name: "login" });
   } catch (error) {
     modalError.value = error instanceof Error ? error.message : "退出登录失败";
     logoutSaving.value = false;
@@ -256,7 +251,7 @@ function showToast(message: string) {
 </script>
 
 <template>
-  <div class="vault-app" :class="`mobile-view-${mobileView}`">
+  <div class="vault-app">
     <TopBar
       :settings-open="settingsOpen"
       @open-settings="settingsOpen = true"
@@ -265,7 +260,7 @@ function showToast(message: string) {
     />
     <div class="vault-grid">
       <SidebarNav @add-site="openCreateSite" />
-      <SiteList @selected="handleSiteSelected" />
+      <SiteList />
       <SiteDetail
         :site="vault.selectedSite"
         :loading="vault.detailLoading"
@@ -286,28 +281,29 @@ function showToast(message: string) {
       />
     </div>
 
-    <nav class="mobile-bottom-nav" aria-label="移动端导航">
-      <button type="button" :class="{ active: mobileView === 'filters' }" @click="openMobileView('filters')">
-        <FolderTree :size="18" />
-        分类
-      </button>
-      <button type="button" :class="{ active: mobileView === 'sites' }" @click="openMobileView('sites')">
-        <ListChecks :size="18" />
-        网站
-      </button>
-      <button type="button" :class="{ active: mobileView === 'detail' }" :disabled="!vault.selectedSite && !vault.detailLoading" @click="openMobileView('detail')">
-        <FileText :size="18" />
-        详情
-      </button>
-      <button type="button" :class="{ active: mobileView === 'accounts' }" :disabled="!vault.selectedSite" @click="openMobileView('accounts')">
-        <UsersRound :size="18" />
-        账号
-      </button>
-    </nav>
+    <MobileVaultShell
+      :site="vault.selectedSite"
+      :loading="vault.detailLoading"
+      :favorite-saving-id="favoriteSavingId"
+      :settings-open="settingsOpen"
+      @open-settings="settingsOpen = true"
+      @open-profile="profileOpen = true"
+      @request-logout="logoutConfirmOpen = true"
+      @add-site="openCreateSite"
+      @edit-site="openEditSite"
+      @delete-site="deletingSite = $event"
+      @toggle-favorite="toggleFavorite"
+      @remove-backup-url="removeBackupUrl"
+      @add-account="openCreateAccount"
+      @edit-account="openEditAccount"
+      @generate-account="openGenerateAccount"
+      @delete-account="deletingAccount = $event"
+      @copied="showToast"
+    />
 
     <p v-if="modalError" class="floating-error">{{ modalError }}</p>
     <p v-if="toast" class="floating-toast">{{ toast }}</p>
-    <div v-if="!vault.vaultUnlocked" class="vault-lock-banner">
+    <div v-if="!vault.vaultUnlocked && !unlockOpen" class="vault-lock-banner">
       <LockKeyhole :size="17" />
       <span>账号密码已锁定</span>
       <button class="link-button" type="button" @click="unlockOpen = true">解锁</button>

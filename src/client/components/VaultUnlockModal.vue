@@ -51,7 +51,7 @@ function submit() {
 </script>
 
 <template>
-  <ModalFrame :open="open" :title="title" :dismissible="!busy" @close="emit('close')">
+  <ModalFrame :open="open" :title="title" :dismissible="!busy" frame-class="vault-unlock-frame" @close="emit('close')">
     <form class="modal-form vault-unlock-form" @submit.prevent="submit">
       <div class="unlock-intro">
         <LockKeyhole :size="28" />
