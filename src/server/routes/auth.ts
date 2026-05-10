@@ -4,9 +4,15 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { HttpError, asyncHandler } from "../http.js";
 import { clearAuthCookie, publicUser, requireAuth, setAuthCookie } from "../middleware/auth.js";
-import { rateLimit } from "../middleware/security.js";
+import {
+  assertRateLimitAvailable,
+  rateLimit,
+  recordRateLimitAttempt,
+  resetRateLimit
+} from "../middleware/security.js";
 import { getRegistrationEnabled } from "../services/bootstrap.js";
 import { createUserSalt } from "../utils/crypto.js";
+import { isClientEncryptedSecret } from "../utils/vaultSecret.js";
 
 export const authRouter = Router();
 
@@ -27,8 +33,26 @@ const passwordSchema = z.object({
 });
 
 const vaultSchema = z.object({
-  vaultVerifier: z.string().min(1, "请设置保险库主密码")
+  vaultVerifier: z
+    .string()
+    .min(1, "请设置保险库主密码")
+    .max(4096)
+    .refine(isClientEncryptedSecret, "保险库验证器必须先在客户端加密")
 });
+
+const registerRateLimit = {
+  keyPrefix: "register",
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "注册尝试过于频繁，请稍后再试"
+};
+
+const loginRateLimit = {
+  keyPrefix: "login",
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: "登录尝试过于频繁，请 15 分钟后再试"
+};
 
 const userSelect = {
   id: true,
@@ -43,12 +67,7 @@ const userSelect = {
 
 authRouter.post(
   "/register",
-  rateLimit({
-    keyPrefix: "register",
-    windowMs: 15 * 60 * 1000,
-    max: 10,
-    message: "注册尝试过于频繁，请稍后再试"
-  }),
+  rateLimit(registerRateLimit),
   asyncHandler(async (req, res) => {
     const input = authSchema.parse(req.body);
     const registrationEnabled = await getRegistrationEnabled();
@@ -78,19 +97,18 @@ authRouter.post(
 
 authRouter.post(
   "/login",
-  rateLimit({
-    keyPrefix: "login",
-    windowMs: 15 * 60 * 1000,
-    max: 8,
-    message: "登录尝试过于频繁，请 15 分钟后再试"
-  }),
   asyncHandler(async (req, res) => {
     const input = authSchema.pick({ email: true, password: true }).parse(req.body);
+    req.body.email = input.email;
+    assertRateLimitAvailable(req, loginRateLimit);
+
     const user = await prisma.user.findUnique({ where: { email: input.email } });
     if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) {
+      recordRateLimitAttempt(req, loginRateLimit);
       throw new HttpError(401, "邮箱或密码不正确");
     }
 
+    resetRateLimit(req, loginRateLimit);
     setAuthCookie(res, user.id, user.tokenVersion);
     res.json({
       user: publicUser({

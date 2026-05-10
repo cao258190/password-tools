@@ -12,6 +12,13 @@ type RateBucket = {
   resetAt: number;
 };
 
+type RateLimitOptions = {
+  keyPrefix: string;
+  windowMs: number;
+  max: number;
+  message?: string;
+};
+
 const rateBuckets = new Map<string, RateBucket>();
 
 function sameToken(left: string, right: string) {
@@ -87,6 +94,56 @@ function clientIp(req: Request) {
   return req.ip || req.socket.remoteAddress || "unknown";
 }
 
+function rateLimitKey(req: Request, options: RateLimitOptions) {
+  return `${options.keyPrefix}:${clientIp(req)}:${String(req.body?.email ?? "").toLowerCase()}`;
+}
+
+function rateLimitMessage(options: RateLimitOptions) {
+  return options.message ?? "操作过于频繁，请稍后再试";
+}
+
+function currentRateBucket(key: string, now: number, windowMs: number) {
+  const current = rateBuckets.get(key);
+  if (current && current.resetAt > now) return current;
+
+  return {
+    count: 0,
+    resetAt: now + windowMs
+  };
+}
+
+function pruneExpiredRateBuckets(now: number) {
+  if (rateBuckets.size <= 1000) return;
+
+  for (const [bucketKey, value] of rateBuckets.entries()) {
+    if (value.resetAt <= now) rateBuckets.delete(bucketKey);
+  }
+}
+
+export function assertRateLimitAvailable(req: Request, options: RateLimitOptions) {
+  const now = Date.now();
+  const bucket = currentRateBucket(rateLimitKey(req, options), now, options.windowMs);
+  pruneExpiredRateBuckets(now);
+
+  if (bucket.count >= options.max) {
+    throw new HttpError(429, rateLimitMessage(options));
+  }
+}
+
+export function recordRateLimitAttempt(req: Request, options: RateLimitOptions) {
+  const now = Date.now();
+  const key = rateLimitKey(req, options);
+  const bucket = currentRateBucket(key, now, options.windowMs);
+
+  bucket.count += 1;
+  rateBuckets.set(key, bucket);
+  pruneExpiredRateBuckets(now);
+}
+
+export function resetRateLimit(req: Request, options: RateLimitOptions) {
+  rateBuckets.delete(rateLimitKey(req, options));
+}
+
 export function securityHeaders(_req: Request, res: Response, next: NextFunction) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -133,38 +190,14 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
-export function rateLimit(options: {
-  keyPrefix: string;
-  windowMs: number;
-  max: number;
-  message?: string;
-}) {
+export function rateLimit(options: RateLimitOptions) {
   return (req: Request, _res: Response, next: NextFunction) => {
-    const now = Date.now();
-    const key = `${options.keyPrefix}:${clientIp(req)}:${String(req.body?.email ?? "").toLowerCase()}`;
-    const current = rateBuckets.get(key);
-    const bucket: RateBucket =
-      current && current.resetAt > now
-        ? current
-        : {
-            count: 0,
-            resetAt: now + options.windowMs
-          };
-
-    bucket.count += 1;
-    rateBuckets.set(key, bucket);
-
-    if (bucket.count > options.max) {
-      next(new HttpError(429, options.message ?? "操作过于频繁，请稍后再试"));
-      return;
+    try {
+      assertRateLimitAvailable(req, options);
+      recordRateLimitAttempt(req, options);
+      next();
+    } catch (error) {
+      next(error);
     }
-
-    if (rateBuckets.size > 1000) {
-      for (const [bucketKey, value] of rateBuckets.entries()) {
-        if (value.resetAt <= now) rateBuckets.delete(bucketKey);
-      }
-    }
-
-    next();
   };
 }

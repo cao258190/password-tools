@@ -1,5 +1,6 @@
 export const clientSecretPrefix = "vault:v1:";
+const clientSecretPattern = /^vault:v1:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/;
 
 export function isClientEncryptedSecret(value: string) {
-  return value.startsWith(clientSecretPrefix);
+  return clientSecretPattern.test(value);
 }

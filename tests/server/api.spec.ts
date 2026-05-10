@@ -75,6 +75,12 @@ describe("password vault API", () => {
     expect(response.body.user.vaultVerifier).toBeNull();
 
     const token = await csrfToken(agent);
+    await agent
+      .patch("/api/auth/vault")
+      .set(csrfHeader, token)
+      .send({ vaultVerifier: "vault:v1:missing-cipher" })
+      .expect(400);
+
     const verifier = clientSecret("verifier");
     const updated = await agent
       .patch("/api/auth/vault")
@@ -380,6 +386,17 @@ describe("password vault API", () => {
       .expect(429);
   });
 
+  it("does not count successful logins against the failed login limiter", async () => {
+    const agent = request.agent(app);
+
+    for (let index = 0; index < 9; index += 1) {
+      await agent
+        .post("/api/auth/login")
+        .send({ email: "admin@example.com", password: "admin123456" })
+        .expect(200);
+    }
+  });
+
   it("uses one shared fixed category set for every user", async () => {
     const first = await registerAgent("first@example.com");
     const second = await registerAgent("second@example.com");
@@ -454,6 +471,24 @@ describe("password vault API", () => {
     const work = categories.body.categories.find(
       (category: { name: string }) => category.name === "工作"
     );
+
+    await agent
+      .post("/api/sites")
+      .set(csrfHeader, token)
+      .send({
+        name: "Malformed Secret",
+        primaryUrl: "https://malformed.example.com",
+        backupUrls: [],
+        tags: [],
+        accounts: [
+          {
+            label: "主账号",
+            username: "owner@example.com",
+            passwordSecret: "vault:v1:missing-cipher"
+          }
+        ]
+      })
+      .expect(400);
 
     const created = await agent
       .post("/api/sites")
