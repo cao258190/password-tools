@@ -40,6 +40,28 @@ describe("CSRF origin validation", () => {
       .expect(401);
   });
 
+  it("allows same-host HTTPS origins when TLS is terminated before the app proxy", async () => {
+    await request(app)
+      .post("/api/auth/login")
+      .set("Host", "api:2697")
+      .set("X-Forwarded-Host", "vault.example")
+      .set("X-Forwarded-Proto", "http")
+      .set("Origin", "https://vault.example")
+      .send(loginPayload)
+      .expect(401);
+  });
+
+  it("still rejects same-host origins on a different port", async () => {
+    await request(app)
+      .post("/api/auth/login")
+      .set("Host", "api:2697")
+      .set("X-Forwarded-Host", "vault.example:3910")
+      .set("X-Forwarded-Proto", "http")
+      .set("Origin", "https://vault.example")
+      .send(loginPayload)
+      .expect(403);
+  });
+
   it("rejects cross-site login origins before credentials are processed", async () => {
     await request(app)
       .post("/api/auth/login")

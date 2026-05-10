@@ -30,6 +30,22 @@ function originOf(value: string | undefined) {
   }
 }
 
+function addHttpOriginVariants(origins: Set<string>, origin: string | null) {
+  if (!origin) return;
+  origins.add(origin);
+
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return;
+
+    const alternate = new URL(url.toString());
+    alternate.protocol = url.protocol === "http:" ? "https:" : "http:";
+    origins.add(alternate.origin);
+  } catch {
+    // originOf already validates values before they get here.
+  }
+}
+
 function requestOrigin(req: Request) {
   const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = forwardedHost || req.get("host");
@@ -44,8 +60,8 @@ function trustedOrigins(req: Request) {
   const configuredOrigin = originOf(env.corsOrigin);
   const currentOrigin = requestOrigin(req);
 
-  if (configuredOrigin) origins.add(configuredOrigin);
-  if (currentOrigin) origins.add(currentOrigin);
+  addHttpOriginVariants(origins, configuredOrigin);
+  addHttpOriginVariants(origins, currentOrigin);
 
   return origins;
 }
