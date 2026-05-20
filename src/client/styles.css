@@ -648,7 +648,7 @@ a {
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 45px;
+  min-height: 58px;
   padding: 5px 7px;
   color: #d7e1ee;
   border: 1px solid transparent;
@@ -676,18 +676,31 @@ a {
   gap: 3px;
 }
 
+.site-row-main {
+  display: grid;
+  grid-template-rows: 16px 14px 14px;
+  align-self: stretch;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+}
+
 .site-row-main strong,
 .site-row-main small,
 .site-row-meta small,
 .url-box span,
 .secret-value {
+  display: block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .site-row-main strong {
+  max-width: 100%;
   font-size: 13px;
+  line-height: 16px;
 }
 
 .site-row-main small,
@@ -700,26 +713,34 @@ a {
   font-size: 11px;
 }
 
+.site-row-main small {
+  max-width: 100%;
+  line-height: 14px;
+}
+
 .site-row-meta {
   display: grid;
-  grid-template-rows: 13px 15px;
+  grid-template-rows: 16px 14px 14px;
+  align-self: stretch;
   align-items: center;
   justify-items: end;
-  gap: 2px;
+  gap: 1px;
   color: #91a4bf;
 }
 
 .site-favorite-slot {
   display: inline-flex;
+  grid-row: 1;
   align-items: center;
   justify-content: center;
   width: 16px;
-  height: 13px;
+  height: 100%;
   flex: none;
 }
 
 .site-time-lock {
   display: inline-flex;
+  grid-row: 2;
   align-items: center;
   max-width: 54px;
 }
@@ -2465,7 +2486,7 @@ html[data-theme="soft"] .profile-pill {
   }
 
   .site-row-meta {
-    grid-template-rows: 16px 18px;
+    grid-template-rows: 16px 14px 14px;
   }
 
   .site-time-lock {

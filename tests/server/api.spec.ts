@@ -526,33 +526,182 @@ describe("password vault API", () => {
     expect(detail.body.site.accountCount).toBe(1);
   });
 
+  it("rotates the vault verifier and all account secrets for the current user", async () => {
+    const owner = await registerAgent("rotate-owner@example.com");
+    const other = await registerAgent("rotate-other@example.com");
+    const ownerToken = await csrfToken(owner);
+    const otherToken = await csrfToken(other);
+
+    const ownerSite = await owner
+      .post("/api/sites")
+      .set(csrfHeader, ownerToken)
+      .send({
+        name: "Owner",
+        primaryUrl: "https://owner.example.com",
+        accounts: [
+          {
+            label: "主账号",
+            username: "owner@example.com",
+            passwordSecret: clientSecret("owner-old")
+          },
+          {
+            label: "备用账号",
+            username: "backup@example.com",
+            passwordSecret: clientSecret("backup-old")
+          }
+        ]
+      })
+      .expect(201);
+    const otherSite = await other
+      .post("/api/sites")
+      .set(csrfHeader, otherToken)
+      .send({
+        name: "Other",
+        primaryUrl: "https://other.example.com",
+        accounts: [
+          {
+            label: "其他账号",
+            username: "other@example.com",
+            passwordSecret: clientSecret("other-old")
+          }
+        ]
+      })
+      .expect(201);
+
+    const ownerAccounts = ownerSite.body.site.accounts as Array<{ id: string }>;
+    const otherAccountId = otherSite.body.site.accounts[0].id as string;
+
+    await owner
+      .patch("/api/auth/vault/password")
+      .set(csrfHeader, ownerToken)
+      .send({
+        vaultVerifier: clientSecret("rotated-verifier"),
+        accounts: ownerAccounts.slice(0, 1).map((account, index) => ({
+          id: account.id,
+          passwordSecret: clientSecret(`partial-${index}`)
+        }))
+      })
+      .expect(400);
+
+    await owner
+      .patch("/api/auth/vault/password")
+      .set(csrfHeader, ownerToken)
+      .send({
+        vaultVerifier: clientSecret("rotated-verifier"),
+        accounts: [
+          ...ownerAccounts.map((account, index) => ({
+            id: account.id,
+            passwordSecret: clientSecret(`owner-new-${index}`)
+          })),
+          {
+            id: otherAccountId,
+            passwordSecret: clientSecret("stolen")
+          }
+        ]
+      })
+      .expect(404);
+
+    const rotated = await owner
+      .patch("/api/auth/vault/password")
+      .set(csrfHeader, ownerToken)
+      .send({
+        vaultVerifier: clientSecret("rotated-verifier"),
+        accounts: ownerAccounts.map((account, index) => ({
+          id: account.id,
+          passwordSecret: clientSecret(`owner-new-${index}`)
+        }))
+      })
+      .expect(200);
+
+    expect(rotated.body.user.vaultVerifier).toBe(clientSecret("rotated-verifier"));
+    const updatedOwnerAccounts = await prisma.account.findMany({
+      where: { id: { in: ownerAccounts.map((account) => account.id) } },
+      orderBy: { id: "asc" }
+    });
+    expect(updatedOwnerAccounts.map((account) => account.passwordSecret).sort()).toEqual([
+      clientSecret("owner-new-0"),
+      clientSecret("owner-new-1")
+    ].sort());
+
+    const untouchedOther = await prisma.account.findUniqueOrThrow({ where: { id: otherAccountId } });
+    expect(untouchedOther.passwordSecret).toBe(clientSecret("other-old"));
+  });
+
+  it("lists only the current user's client-encrypted account secrets for vault rotation", async () => {
+    const owner = await registerAgent("rotation-list-owner@example.com");
+    const other = await registerAgent("rotation-list-other@example.com");
+    const ownerToken = await csrfToken(owner);
+    const otherToken = await csrfToken(other);
+
+    const ownerSite = await owner
+      .post("/api/sites")
+      .set(csrfHeader, ownerToken)
+      .send({
+        name: "Owner List",
+        primaryUrl: "https://owner-list.example.com",
+        accounts: [
+          {
+            label: "主账号",
+            username: "owner@example.com",
+            passwordSecret: clientSecret("owner-list")
+          }
+        ]
+      })
+      .expect(201);
+    await other
+      .post("/api/sites")
+      .set(csrfHeader, otherToken)
+      .send({
+        name: "Other List",
+        primaryUrl: "https://other-list.example.com",
+        accounts: [
+          {
+            label: "其他账号",
+            username: "other@example.com",
+            passwordSecret: clientSecret("other-list")
+          }
+        ]
+      })
+      .expect(201);
+
+    const listed = await owner.get("/api/accounts/vault-rotation").expect(200);
+
+    expect(listed.body.accounts).toEqual([
+      {
+        id: ownerSite.body.site.accounts[0].id,
+        passwordSecret: clientSecret("owner-list")
+      }
+    ]);
+  });
+
   it("resolves and stores favicons from website addresses", async () => {
     const agent = await registerAgent("favicon@example.com");
+    const origin = "https://93.184.216.34";
     const iconBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
-      if (url === "https://example.com/") {
+      if (url === `${origin}/`) {
         return new Response('<html><head><link rel="icon" href="/assets/icon.png"></head></html>', {
           status: 200,
           headers: { "content-type": "text/html" }
         });
       }
-      if (url === "https://example.com/assets/icon.png") {
+      if (url === `${origin}/assets/icon.png`) {
         return new Response(iconBytes, {
           status: 200,
           headers: { "content-type": "image/png" }
         });
       }
-      if (url === "https://example.com/favicon.ico") {
+      if (url === `${origin}/favicon.ico`) {
         return new Response("", { status: 404 });
       }
       throw new Error(`Unexpected favicon URL: ${url}`);
     });
 
-    const resolved = await agent.get("/api/sites/favicon?url=https%3A%2F%2Fexample.com").expect(200);
+    const resolved = await agent.get(`/api/sites/favicon?url=${encodeURIComponent(origin)}`).expect(200);
     const iconUrl = `data:image/png;base64,${Buffer.from(iconBytes).toString("base64")}`;
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(resolved.body.favicon.sourceUrl).toBe("https://example.com/assets/icon.png");
+    expect(resolved.body.favicon.sourceUrl).toBe(`${origin}/assets/icon.png`);
     expect(resolved.body.favicon.iconUrl).toBe(iconUrl);
     expect(resolved.body.icons).toHaveLength(1);
     expect(resolved.body.icons[0].iconUrl).toBe(iconUrl);
@@ -562,7 +711,7 @@ describe("password vault API", () => {
       .set(csrfHeader, await csrfToken(agent))
       .send({
         name: "Icon Site",
-        primaryUrl: "https://example.com",
+        primaryUrl: origin,
         backupUrls: [],
         iconType: "favicon",
         iconValue: "I",
@@ -577,11 +726,12 @@ describe("password vault API", () => {
 
   it("prefers dynamically configured site logos over static fallback favicons", async () => {
     const agent = await registerAgent("dynamic-favicon@example.com");
+    const origin = "https://93.184.216.35";
     const configuredIcon = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 1, 2, 3, 4]).toString("base64")}`;
     const fallbackIcon = Uint8Array.from([137, 80, 78, 71, 5, 6, 7, 8]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
-      if (url === "https://dynamic.example.com/") {
+      if (url === `${origin}/`) {
         return new Response(
           `<html><head><link rel="icon" href="/logo.png"><script>window.__APP_CONFIG__=${JSON.stringify({
             site_logo: configuredIcon
@@ -592,22 +742,22 @@ describe("password vault API", () => {
           }
         );
       }
-      if (url === "https://dynamic.example.com/logo.png") {
+      if (url === `${origin}/logo.png`) {
         return new Response(fallbackIcon, {
           status: 200,
           headers: { "content-type": "image/png" }
         });
       }
-      if (url === "https://dynamic.example.com/favicon.ico") {
+      if (url === `${origin}/favicon.ico`) {
         return new Response("", { status: 404 });
       }
       throw new Error(`Unexpected dynamic favicon URL: ${url}`);
     });
 
-    const resolved = await agent.get("/api/sites/favicon?url=https%3A%2F%2Fdynamic.example.com").expect(200);
+    const resolved = await agent.get(`/api/sites/favicon?url=${encodeURIComponent(origin)}`).expect(200);
     const fallbackIconUrl = `data:image/png;base64,${Buffer.from(fallbackIcon).toString("base64")}`;
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(resolved.body.favicon.sourceUrl).toBe("https://dynamic.example.com/#site_logo");
+    expect(resolved.body.favicon.sourceUrl).toBe(`${origin}/#site_logo`);
     expect(resolved.body.favicon.iconUrl).toBe(configuredIcon);
     expect(resolved.body.icons.map((icon: { iconUrl: string }) => icon.iconUrl)).toEqual([
       configuredIcon,

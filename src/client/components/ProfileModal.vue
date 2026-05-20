@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
-import { KeyRound, Loader2, Save, UserRound } from "lucide-vue-next";
+import { KeyRound, Loader2, Save, ShieldCheck, UserRound } from "lucide-vue-next";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import ModalFrame from "./ModalFrame.vue";
 import { useAuthStore } from "../stores/auth";
+import { useVaultStore } from "../stores/vault";
 
 const props = defineProps<{
   open: boolean;
@@ -15,6 +16,7 @@ const emit = defineEmits<{
 }>();
 
 const auth = useAuthStore();
+const vault = useVaultStore();
 
 const profileForm = reactive({
   name: "",
@@ -32,17 +34,28 @@ const passwordForm = reactive({
 });
 const passwordConfirmOpen = ref(false);
 
+const vaultPasswordForm = reactive({
+  currentMasterPassword: "",
+  newMasterPassword: "",
+  confirmMasterPassword: "",
+  saving: false,
+  error: ""
+});
+const vaultPasswordConfirmOpen = ref(false);
+
 watch(
   () => [props.open, auth.user, auth.user?.email, auth.user?.name],
   () => {
     if (!props.open) {
       passwordConfirmOpen.value = false;
+      vaultPasswordConfirmOpen.value = false;
       return;
     }
     profileForm.name = auth.user?.name ?? "";
     profileForm.email = auth.user?.email ?? "";
     profileForm.error = "";
     resetPasswordForm();
+    resetVaultPasswordForm();
   },
   { immediate: true }
 );
@@ -53,6 +66,14 @@ function resetPasswordForm() {
   passwordForm.confirmPassword = "";
   passwordForm.error = "";
   passwordConfirmOpen.value = false;
+}
+
+function resetVaultPasswordForm() {
+  vaultPasswordForm.currentMasterPassword = "";
+  vaultPasswordForm.newMasterPassword = "";
+  vaultPasswordForm.confirmMasterPassword = "";
+  vaultPasswordForm.error = "";
+  vaultPasswordConfirmOpen.value = false;
 }
 
 async function saveProfile() {
@@ -101,6 +122,37 @@ async function changePassword() {
     passwordForm.saving = false;
   }
 }
+
+function requestVaultPasswordChange() {
+  if (vaultPasswordForm.saving) return;
+  vaultPasswordForm.error = "";
+  if (vaultPasswordForm.newMasterPassword !== vaultPasswordForm.confirmMasterPassword) {
+    vaultPasswordForm.error = "两次输入的新保险库主密码不一致";
+    return;
+  }
+  if (vaultPasswordForm.currentMasterPassword === vaultPasswordForm.newMasterPassword) {
+    vaultPasswordForm.error = "新保险库主密码不能与原密码相同";
+    return;
+  }
+
+  vaultPasswordConfirmOpen.value = true;
+}
+
+async function changeVaultPassword() {
+  if (vaultPasswordForm.saving) return;
+  vaultPasswordForm.saving = true;
+  vaultPasswordForm.error = "";
+  try {
+    await vault.rotateVaultPassword(vaultPasswordForm.currentMasterPassword, vaultPasswordForm.newMasterPassword);
+    resetVaultPasswordForm();
+    emit("notice", "保险库主密码已更新");
+  } catch (error) {
+    vaultPasswordForm.error = error instanceof Error ? error.message : "修改保险库主密码失败";
+    vaultPasswordConfirmOpen.value = false;
+  } finally {
+    vaultPasswordForm.saving = false;
+  }
+}
 </script>
 
 <template>
@@ -136,7 +188,7 @@ async function changePassword() {
       <section class="profile-section">
         <div class="profile-section-title">
           <KeyRound :size="18" />
-          <h3>修改密码</h3>
+          <h3>修改登录密码</h3>
         </div>
         <form class="modal-form profile-form" @submit.prevent="requestPasswordChange">
           <label>
@@ -164,6 +216,39 @@ async function changePassword() {
           </footer>
         </form>
       </section>
+
+      <section class="profile-section">
+        <div class="profile-section-title">
+          <ShieldCheck :size="18" />
+          <h3>修改保险库主密码</h3>
+        </div>
+        <form class="modal-form profile-form" @submit.prevent="requestVaultPasswordChange">
+          <p class="form-hint">保险库主密码用于在浏览器中加密账号密码，修改时会重新加密所有账号密文。</p>
+          <label>
+            原保险库主密码
+            <input v-model="vaultPasswordForm.currentMasterPassword" required minlength="8" type="password" autocomplete="current-password" placeholder="输入原保险库主密码" />
+          </label>
+          <div class="form-grid">
+            <label>
+              新保险库主密码
+              <input v-model="vaultPasswordForm.newMasterPassword" required minlength="8" type="password" autocomplete="new-password" placeholder="至少 8 位" />
+            </label>
+            <label>
+              确认新主密码
+              <input v-model="vaultPasswordForm.confirmMasterPassword" required minlength="8" type="password" autocomplete="new-password" placeholder="再次输入新主密码" />
+            </label>
+          </div>
+          <p v-if="vaultPasswordForm.error" class="form-error">{{ vaultPasswordForm.error }}</p>
+          <footer class="modal-footer">
+            <button class="secondary" type="button" :disabled="vaultPasswordForm.saving" @click="resetVaultPasswordForm">清空</button>
+            <button class="primary" type="submit" :disabled="vaultPasswordForm.saving || !auth.user?.vaultVerifier">
+              <Loader2 v-if="vaultPasswordForm.saving" class="spin" :size="16" />
+              <ShieldCheck v-else :size="16" />
+              {{ vaultPasswordForm.saving ? "更新中" : "更新主密码" }}
+            </button>
+          </footer>
+        </form>
+      </section>
     </div>
   </ModalFrame>
 
@@ -176,5 +261,16 @@ async function changePassword() {
     loading-text="更新中"
     @close="passwordConfirmOpen = false"
     @confirm="changePassword"
+  />
+
+  <ConfirmDialog
+    :open="vaultPasswordConfirmOpen"
+    title="更新保险库主密码"
+    message="确认更新保险库主密码？系统会使用新主密码重新加密所有账号密码。"
+    confirm-text="确认更新"
+    :loading="vaultPasswordForm.saving"
+    loading-text="更新中"
+    @close="vaultPasswordConfirmOpen = false"
+    @confirm="changeVaultPassword"
   />
 </template>

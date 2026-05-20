@@ -176,6 +176,11 @@ export type LegacyMigrationAccount = {
   legacyPassword: string;
 };
 
+export type VaultRotationAccount = {
+  id: string;
+  passwordSecret: string;
+};
+
 export type LegacyMigrationSecretInput = {
   id: string;
   passwordSecret: string;

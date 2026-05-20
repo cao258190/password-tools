@@ -69,6 +69,25 @@ function serializeAccount(account: Account, userSalt: string) {
 }
 
 accountsRouter.get(
+  "/vault-rotation",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const accounts = await prisma.account.findMany({
+      where: { userId: req.authUser!.id },
+      select: {
+        id: true,
+        passwordSecret: true
+      },
+      orderBy: { id: "asc" }
+    });
+
+    res.json({
+      accounts: accounts.filter((account) => isClientEncryptedSecret(account.passwordSecret))
+    });
+  })
+);
+
+accountsRouter.get(
   "/legacy-migration",
   requireAuth,
   asyncHandler(async (req, res) => {

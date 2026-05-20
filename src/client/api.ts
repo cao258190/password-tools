@@ -16,6 +16,7 @@ import type {
   TagSummary,
   UpdateStatus,
   User,
+  VaultRotationAccount,
   VersionInfo
 } from "./types";
 
@@ -91,6 +92,9 @@ export const api = {
   },
   updateVault(input: { vaultVerifier: string }) {
     return request<{ user: User }>("/api/auth/vault", withBody("PATCH", input));
+  },
+  rotateVaultPassword(input: { vaultVerifier: string; accounts: { id: string; passwordSecret: string }[] }) {
+    return request<{ user: User }>("/api/auth/vault/password", withBody("PATCH", input));
   },
   adminSettings() {
     return request<{ settings: AdminSettings }>("/api/admin/settings");
@@ -172,6 +176,9 @@ export const api = {
   },
   legacyMigrationAccounts() {
     return request<{ accounts: LegacyMigrationAccount[] }>("/api/accounts/legacy-migration");
+  },
+  vaultRotationAccounts() {
+    return request<{ accounts: VaultRotationAccount[] }>("/api/accounts/vault-rotation");
   },
   submitLegacyMigration(input: { accounts: LegacyMigrationSecretInput[] }) {
     return request<{ migrated: number }>("/api/accounts/legacy-migration", withBody("POST", input));

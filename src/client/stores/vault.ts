@@ -386,10 +386,55 @@ export const useVaultStore = defineStore("vault", {
         this.vaultBusy = false;
       }
     },
+    async rotateVaultPassword(currentMasterPassword: string, newMasterPassword: string) {
+      const auth = useAuthStore();
+      if (!auth.user?.vaultVerifier) {
+        throw new Error("请先设置保险库主密码");
+      }
+
+      this.vaultBusy = true;
+      this.vaultError = "";
+      this.vaultNotice = "";
+      try {
+        const currentKey = await deriveVaultKey(currentMasterPassword, auth.user.cryptoSalt, auth.user.vaultKdfIterations);
+        const verified = await verifyVaultKey(auth.user.vaultVerifier, currentKey);
+        if (!verified) {
+          throw new Error("当前保险库主密码不正确");
+        }
+
+        await this.migrateLegacyAccountsWithKey(currentKey);
+        const newKey = await deriveVaultKey(newMasterPassword, auth.user.cryptoSalt, auth.user.vaultKdfIterations);
+        const { accounts } = await api.vaultRotationAccounts();
+        const encryptedAccounts = await Promise.all(
+          accounts
+            .filter((account) => isClientEncryptedSecret(account.passwordSecret))
+            .map(async (account) => ({
+              id: account.id,
+              passwordSecret: await encryptVaultText(await decryptVaultText(account.passwordSecret, currentKey), newKey)
+            }))
+        );
+        const vaultVerifier = await createVaultVerifier(newKey);
+        const { user } = await api.rotateVaultPassword({ vaultVerifier, accounts: encryptedAccounts });
+
+        auth.user = user;
+        activeVaultKey = newKey;
+        this.vaultUnlocked = true;
+        this.vaultNotice = "保险库主密码已更新";
+        if (this.selectedSiteId) await this.selectSite(this.selectedSiteId);
+      } catch (error) {
+        this.vaultError = error instanceof Error ? error.message : "修改保险库主密码失败";
+        throw error;
+      } finally {
+        this.vaultBusy = false;
+      }
+    },
     async migrateLegacyAccounts() {
       const vaultKey = activeVaultKey;
       if (!vaultKey) return;
 
+      await this.migrateLegacyAccountsWithKey(vaultKey);
+    },
+    async migrateLegacyAccountsWithKey(vaultKey: CryptoKey) {
       const { accounts } = await api.legacyMigrationAccounts();
       if (accounts.length === 0) return;
 

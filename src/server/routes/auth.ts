@@ -40,6 +40,22 @@ const vaultSchema = z.object({
     .refine(isClientEncryptedSecret, "保险库验证器必须先在客户端加密")
 });
 
+const vaultPasswordSchema = vaultSchema.extend({
+  accounts: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        passwordSecret: z
+          .string()
+          .min(1)
+          .max(4096)
+          .refine(isClientEncryptedSecret, "账号密码必须先在客户端加密")
+      })
+    )
+    .max(5000)
+    .refine((accounts) => new Set(accounts.map((account) => account.id)).size === accounts.length, "Duplicate accounts")
+});
+
 const registerRateLimit = {
   keyPrefix: "register",
   windowMs: 15 * 60 * 1000,
@@ -160,6 +176,54 @@ authRouter.patch(
         name: input.name || null
       },
       select: userSelect
+    });
+
+    res.json({ user: publicUser(user) });
+  })
+);
+
+authRouter.patch(
+  "/vault/password",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const input = vaultPasswordSchema.parse(req.body);
+    const userId = req.authUser!.id;
+    const accountIds = input.accounts.map((account) => account.id);
+    const accountSecrets = new Map(input.accounts.map((account) => [account.id, account.passwordSecret]));
+
+    const [allAccountCount, matchedAccounts] = await Promise.all([
+      prisma.account.count({ where: { userId } }),
+      accountIds.length
+        ? prisma.account.findMany({
+            where: {
+              id: { in: accountIds },
+              userId
+            },
+            select: { id: true }
+          })
+        : Promise.resolve([])
+    ]);
+
+    if (matchedAccounts.length !== input.accounts.length) {
+      throw new HttpError(404, "账号不存在");
+    }
+
+    if (allAccountCount !== input.accounts.length) {
+      throw new HttpError(400, "需要重新加密所有账号后才能更新保险库主密码");
+    }
+
+    const user = await prisma.$transaction(async (transaction) => {
+      await Promise.all(
+        matchedAccounts.map((account) =>
+          transaction.$executeRaw`UPDATE "Account" SET "passwordSecret" = ${accountSecrets.get(account.id)!} WHERE "id" = ${account.id} AND "userId" = ${userId}`
+        )
+      );
+
+      return transaction.user.update({
+        where: { id: userId },
+        data: { vaultVerifier: input.vaultVerifier },
+        select: userSelect
+      });
     });
 
     res.json({ user: publicUser(user) });
